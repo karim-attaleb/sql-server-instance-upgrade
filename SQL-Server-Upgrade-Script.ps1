@@ -143,25 +143,25 @@ function Test-InstanceConnectivity {
         $connection = Connect-DbaInstance -SqlInstance $Instance -ConnectTimeout 10
         if ($connection) {
             Write-UpgradeLog "Successfully connected to $Instance" -WriteToEventLog
-            return $true
+            return $connection
         }
     } catch {
         Write-UpgradeLog "Failed to connect to $Instance : $($_.Exception.Message)" -Level "Error" -WriteToEventLog
-        return $false
+        return $null
     }
 }
 
 function Test-CollationCompatibility {
     param(
-        [string]$SourceInstance,
-        [string]$TargetInstance
+        $SourceConnection,
+        $TargetConnection
     )
     
     Write-UpgradeLog "Checking collation compatibility between instances" -WriteToEventLog
     
     try {
-        $sourceCollation = (Get-DbaDatabase -SqlInstance $SourceInstance -Database master).Collation
-        $targetCollation = (Get-DbaDatabase -SqlInstance $TargetInstance -Database master).Collation
+        $sourceCollation = (Get-DbaDatabase -SqlInstance $SourceConnection -Database master).Collation
+        $targetCollation = (Get-DbaDatabase -SqlInstance $TargetConnection -Database master).Collation
         
         Write-UpgradeLog "Source instance collation: $sourceCollation"
         Write-UpgradeLog "Target instance collation: $targetCollation"
@@ -181,12 +181,12 @@ function Test-CollationCompatibility {
 
 function Get-UserDatabases {
     param(
-        [string]$Instance,
+        $Connection,
         $DatabaseFilter
     )
     
     try {
-        $allDatabases = Get-DbaDatabase -SqlInstance $Instance | Where-Object { $_.Name -notin @('master', 'model', 'msdb', 'tempdb') }
+        $allDatabases = Get-DbaDatabase -SqlInstance $Connection | Where-Object { $_.Name -notin @('master', 'model', 'msdb', 'tempdb') }
         
         if ($DatabaseFilter -eq "All") {
             return $allDatabases
@@ -201,18 +201,18 @@ function Get-UserDatabases {
 
 function Test-EncryptionSupport {
     param(
-        [string]$Instance,
+        $Connection,
         [string]$DatabaseName
     )
     
     try {
-        $database = Get-DbaDatabase -SqlInstance $Instance -Database $DatabaseName
+        $database = Get-DbaDatabase -SqlInstance $Connection -Database $DatabaseName
         
         # Check for TDE
-        $tdeStatus = Get-DbaTdeEncryption -SqlInstance $Instance -Database $DatabaseName
+        $tdeStatus = Get-DbaTdeEncryption -SqlInstance $Connection -Database $DatabaseName
         
         # Check for encrypted objects
-        $encryptedObjects = Get-DbaModule -SqlInstance $Instance -Database $DatabaseName | Where-Object { $_.IsEncrypted -eq $true }
+        $encryptedObjects = Get-DbaModule -SqlInstance $Connection -Database $DatabaseName | Where-Object { $_.IsEncrypted -eq $true }
         
         return @{
             HasTDE = ($tdeStatus.EncryptionState -eq "Encrypted")
@@ -231,8 +231,8 @@ function Test-EncryptionSupport {
 
 function Copy-DatabaseObjects {
     param(
-        [string]$SourceInstance,
-        [string]$TargetInstance,
+        $SourceConnection,
+        $TargetConnection,
         [string]$DatabaseName,
         [string[]]$ObjectTypes,
         [bool]$IncludeEncryption,
@@ -244,14 +244,14 @@ function Copy-DatabaseObjects {
     
     try {
         # Check if database already exists on target (idempotent check)
-        $targetDb = Get-DbaDatabase -SqlInstance $TargetInstance -Database $DatabaseName -ErrorAction SilentlyContinue
+        $targetDb = Get-DbaDatabase -SqlInstance $TargetConnection -Database $DatabaseName -ErrorAction SilentlyContinue
         
         if (-not $targetDb) {
             Write-UpgradeLog "Creating database $DatabaseName on target instance"
             
             if (-not $WhatIfMode) {
                 # Copy database structure
-                Copy-DbaDatabase -Source $SourceInstance -Destination $TargetInstance -Database $DatabaseName -BackupRestore -SharedPath "C:\Temp\SQLUpgrade" -Force
+                Copy-DbaDatabase -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName -BackupRestore -SharedPath "C:\Temp\SQLUpgrade" -Force
             } else {
                 Write-UpgradeLog "[WHATIF] Would create database $DatabaseName on target instance"
             }
@@ -266,42 +266,42 @@ function Copy-DatabaseObjects {
             switch ($objectType) {
                 "Tables" {
                     if (-not $WhatIfMode) {
-                        Copy-DbaDbTable -Source $SourceInstance -Destination $TargetInstance -Database $DatabaseName
+                        Copy-DbaDbTable -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
                     } else {
                         Write-UpgradeLog "[WHATIF] Would copy tables for database $DatabaseName"
                     }
                 }
                 "Views" {
                     if (-not $WhatIfMode) {
-                        Copy-DbaDbView -Source $SourceInstance -Destination $TargetInstance -Database $DatabaseName
+                        Copy-DbaDbView -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
                     } else {
                         Write-UpgradeLog "[WHATIF] Would copy views for database $DatabaseName"
                     }
                 }
                 "StoredProcedures" {
                     if (-not $WhatIfMode) {
-                        Copy-DbaDbStoredProcedure -Source $SourceInstance -Destination $TargetInstance -Database $DatabaseName
+                        Copy-DbaDbStoredProcedure -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
                     } else {
                         Write-UpgradeLog "[WHATIF] Would copy stored procedures for database $DatabaseName"
                     }
                 }
                 "Functions" {
                     if (-not $WhatIfMode) {
-                        Copy-DbaDbFunction -Source $SourceInstance -Destination $TargetInstance -Database $DatabaseName
+                        Copy-DbaDbFunction -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
                     } else {
                         Write-UpgradeLog "[WHATIF] Would copy functions for database $DatabaseName"
                     }
                 }
                 "Users" {
                     if (-not $WhatIfMode) {
-                        Copy-DbaDbUser -Source $SourceInstance -Destination $TargetInstance -Database $DatabaseName
+                        Copy-DbaDbUser -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
                     } else {
                         Write-UpgradeLog "[WHATIF] Would copy users for database $DatabaseName"
                     }
                 }
                 "Roles" {
                     if (-not $WhatIfMode) {
-                        Copy-DbaDbRole -Source $SourceInstance -Destination $TargetInstance -Database $DatabaseName
+                        Copy-DbaDbRole -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
                     } else {
                         Write-UpgradeLog "[WHATIF] Would copy roles for database $DatabaseName"
                     }
@@ -311,7 +311,7 @@ function Copy-DatabaseObjects {
         
         # Handle encryption if requested
         if ($IncludeEncryption) {
-            $encryptionInfo = Test-EncryptionSupport -Instance $SourceInstance -DatabaseName $DatabaseName
+            $encryptionInfo = Test-EncryptionSupport -Connection $SourceConnection -DatabaseName $DatabaseName
             
             if ($encryptionInfo.HasTDE) {
                 Write-UpgradeLog "Database $DatabaseName has TDE encryption - handling TDE migration"
@@ -336,7 +336,7 @@ function Copy-DatabaseObjects {
 
 function Invoke-PostUpgradeTasks {
     param(
-        [string]$TargetInstance,
+        $TargetConnection,
         [string[]]$DatabaseNames,
         [bool]$WhatIfMode
     )
@@ -350,7 +350,7 @@ function Invoke-PostUpgradeTasks {
             # Database Integrity Check
             Write-UpgradeLog "Running DBCC CHECKDB for $dbName"
             if (-not $WhatIfMode) {
-                $checkResult = Invoke-DbaDbccCheckDb -SqlInstance $TargetInstance -Database $dbName
+                $checkResult = Invoke-DbaDbccCheckDb -SqlInstance $TargetConnection -Database $dbName
                 if ($checkResult.Status -eq "Success") {
                     Write-UpgradeLog "DBCC CHECKDB completed successfully for $dbName" -WriteToEventLog
                 } else {
@@ -363,7 +363,7 @@ function Invoke-PostUpgradeTasks {
             # Update Database Compatibility Level
             Write-UpgradeLog "Updating compatibility level for $dbName to SQL Server 2022"
             if (-not $WhatIfMode) {
-                Set-DbaDbCompatibility -SqlInstance $TargetInstance -Database $dbName -CompatibilityLevel 160 # SQL Server 2022
+                Set-DbaDbCompatibility -SqlInstance $TargetConnection -Database $dbName -CompatibilityLevel 160 # SQL Server 2022
             } else {
                 Write-UpgradeLog "[WHATIF] Would update compatibility level for $dbName to 160"
             }
@@ -371,7 +371,7 @@ function Invoke-PostUpgradeTasks {
             # Update Statistics
             Write-UpgradeLog "Updating statistics for $dbName"
             if (-not $WhatIfMode) {
-                Update-DbaStatistics -SqlInstance $TargetInstance -Database $dbName
+                Update-DbaStatistics -SqlInstance $TargetConnection -Database $dbName
             } else {
                 Write-UpgradeLog "[WHATIF] Would update statistics for $dbName"
             }
@@ -379,7 +379,7 @@ function Invoke-PostUpgradeTasks {
             # Rebuild Indexes
             Write-UpgradeLog "Rebuilding indexes for $dbName"
             if (-not $WhatIfMode) {
-                Invoke-DbaDbShrink -SqlInstance $TargetInstance -Database $dbName -RebuildIndexes
+                Invoke-DbaDbShrink -SqlInstance $TargetConnection -Database $dbName -RebuildIndexes
             } else {
                 Write-UpgradeLog "[WHATIF] Would rebuild indexes for $dbName"
             }
@@ -398,21 +398,25 @@ try {
     Write-UpgradeLog "WhatIf Mode: $WhatIf"
     Write-UpgradeLog "Include Encryption: $IncludeEncryption"
     
-    # Test connectivity
-    Write-UpgradeLog "Testing connectivity to instances"
-    if (-not (Test-InstanceConnectivity -Instance $SourceInstance)) {
+    # Establish robust connections to both instances
+    Write-UpgradeLog "Establishing connections to instances"
+    $sourceConnection = Test-InstanceConnectivity -Instance $SourceInstance
+    if (-not $sourceConnection) {
         throw "Cannot connect to source instance: $SourceInstance"
     }
     
-    if (-not (Test-InstanceConnectivity -Instance $TargetInstance)) {
+    $targetConnection = Test-InstanceConnectivity -Instance $TargetInstance
+    if (-not $targetConnection) {
         throw "Cannot connect to target instance: $TargetInstance"
     }
     
+    Write-UpgradeLog "Successfully established connections to both instances"
+    
     # Check collation compatibility
-    Test-CollationCompatibility -SourceInstance $SourceInstance -TargetInstance $TargetInstance
+    Test-CollationCompatibility -SourceConnection $sourceConnection -TargetConnection $targetConnection
     
     # Get databases to process
-    $databasesToProcess = Get-UserDatabases -Instance $SourceInstance -DatabaseFilter $Databases
+    $databasesToProcess = Get-UserDatabases -Connection $sourceConnection -DatabaseFilter $Databases
     Write-UpgradeLog "Found $($databasesToProcess.Count) databases to process"
     
     foreach ($db in $databasesToProcess) {
@@ -423,7 +427,7 @@ try {
     $processedDatabases = @()
     foreach ($database in $databasesToProcess) {
         try {
-            Copy-DatabaseObjects -SourceInstance $SourceInstance -TargetInstance $TargetInstance -DatabaseName $database.Name -ObjectTypes $ObjectTypes -IncludeEncryption $IncludeEncryption -OutputFile $OutputFile -WhatIfMode $WhatIf
+            Copy-DatabaseObjects -SourceConnection $sourceConnection -TargetConnection $targetConnection -DatabaseName $database.Name -ObjectTypes $ObjectTypes -IncludeEncryption $IncludeEncryption -OutputFile $OutputFile -WhatIfMode $WhatIf
             $processedDatabases += $database.Name
         } catch {
             Write-UpgradeLog "Failed to process database $($database.Name): $($_.Exception.Message)" -Level "Error" -WriteToEventLog
@@ -432,7 +436,7 @@ try {
     
     # Run post-upgrade tasks
     if ($processedDatabases.Count -gt 0 -and -not $WhatIf) {
-        Invoke-PostUpgradeTasks -TargetInstance $TargetInstance -DatabaseNames $processedDatabases -WhatIfMode $WhatIf
+        Invoke-PostUpgradeTasks -TargetConnection $targetConnection -DatabaseNames $processedDatabases -WhatIfMode $WhatIf
     }
     
     Write-UpgradeLog "=== SQL Server Upgrade Script Completed Successfully ===" -WriteToEventLog
