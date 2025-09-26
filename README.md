@@ -7,21 +7,23 @@ This PowerShell script provides a comprehensive solution for upgrading SQL Serve
 ✅ **All Requirements Met:**
 
 1. **dbatools Integration**: Uses dbatools for all SQL database operations (no T-SQL)
-2. **Selective Object Transfer**: Choose specific object types to transfer
-3. **Collation Checking**: Automatically verifies collation compatibility
-4. **Encryption & TDE Support**: Handles encrypted objects and TDE databases
-5. **Flexible Execution**: Direct application or output file generation
-6. **WhatIf Support**: Preview changes without execution
-7. **Safe Operations**: Never drops anything, only adds objects
-8. **Database Selection**: Choose specific databases or all user databases
-9. **Idempotent**: Safe to run multiple times
+2. **Robust Connection Management**: Uses Connect-DbaInstance for persistent, reliable connections
+3. **Selective Object Transfer**: Choose specific object types to transfer
+4. **Collation Checking**: Automatically verifies collation compatibility
+5. **Encryption & TDE Support**: Handles encrypted objects and TDE databases
+6. **Flexible Execution**: Direct application or output file generation
+7. **WhatIf Support**: Preview changes without execution
+8. **Safe Operations**: Never drops anything, only adds objects
+9. **Database Selection**: Choose specific databases or all user databases
+10. **Idempotent**: Safe to run multiple times
 
 ## Additional Features
 
+- **Robust Connection Objects**: Establishes persistent connections using Connect-DbaInstance for better reliability
 - **Comprehensive Logging**: File-based and Windows Event Log integration
 - **Post-Upgrade Tasks**: Integrity checks, compatibility level updates, statistics, index rebuilds
 - **Error Handling**: Robust error handling with detailed logging
-- **Connectivity Testing**: Validates connections before processing
+- **Connectivity Testing**: Validates connections before processing and maintains them throughout execution
 
 ## Prerequisites
 
