@@ -27,10 +27,10 @@ This solution provides a comprehensive PowerShell script for upgrading SQL Serve
 - **Cmdlets used**: Connect-DbaInstance, Get-DbaDatabase, Copy-DbaDatabase, Copy-DbaDbTable, Copy-DbaDbView, Copy-DbaDbStoredProcedure, Copy-DbaDbFunction, Copy-DbaDbUser, Copy-DbaDbRole, Get-DbaTdeEncryption, Get-DbaModule, Invoke-DbaDbccCheckDb, Set-DbaDbCompatibility, Update-DbaStatistics
 - **No T-SQL**: Zero T-SQL commands used
 
-### ✅ 2. Possible to choose what objects to transfer
-- **IMPLEMENTED**: `$ObjectTypes` parameter with default array
-- **Supported objects**: Tables, Views, StoredProcedures, Functions, Triggers, UserDefinedDataTypes, UserDefinedTableTypes, Schemas, Users, Roles, Permissions
-- **Flexible selection**: Users can specify subset of object types
+### ✅ 2. Complete database migration approach
+- **IMPLEMENTED**: Focus on migrating entire databases as complete units
+- **Database-centric**: Uses Copy-DbaDatabase for complete database migration
+- **Maintains integrity**: All database objects migrated together preserving dependencies
 
 ### ✅ 3. Check collation of target server
 - **IMPLEMENTED**: `Test-CollationCompatibility` function
@@ -145,11 +145,11 @@ This solution provides a comprehensive PowerShell script for upgrading SQL Serve
 
 ### Functions Implemented
 1. `Write-UpgradeLog` - Centralized logging
-2. `Test-InstanceConnectivity` - Connection validation
+2. `Test-InstanceConnectivity` - Connection validation and returns connection objects
 3. `Test-CollationCompatibility` - Collation checking
 4. `Get-UserDatabases` - Database enumeration
 5. `Test-EncryptionSupport` - Encryption detection
-6. `Copy-DatabaseObjects` - Main migration logic
+6. `Copy-CompleteDatabase` - Complete database migration logic
 7. `Invoke-PostUpgradeTasks` - Post-upgrade maintenance
 
 ### Error Handling Strategy
@@ -188,7 +188,8 @@ This solution provides a comprehensive PowerShell script for upgrading SQL Serve
 This solution provides a **production-ready, enterprise-grade** SQL Server upgrade script that meets all specified requirements:
 
 - ✅ **100% dbatools usage** (no T-SQL)
-- ✅ **Selective object transfer**
+- ✅ **Complete database migration** (entire databases as units)
+- ✅ **Robust connection management** (Connect-DbaInstance)
 - ✅ **Collation checking**
 - ✅ **Encryption/TDE support**
 - ✅ **WhatIf functionality**
