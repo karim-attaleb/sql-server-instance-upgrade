@@ -8,7 +8,7 @@
 .DESCRIPTION
     This script performs a comprehensive SQL Server upgrade using dbatools with the following features:
     - Side-by-side installation support
-    - Selective object transfer
+    - Complete database migration
     - Collation checking
     - Encryption and TDE support
     - WhatIf functionality
@@ -25,8 +25,6 @@
 .PARAMETER Databases
     Array of database names to upgrade. Use 'All' for all user databases
     
-.PARAMETER ObjectTypes
-    Array of object types to transfer (Tables, Views, StoredProcedures, Functions, Triggers, etc.)
     
 .PARAMETER IncludeEncryption
     Include encrypted objects and TDE databases
@@ -65,7 +63,6 @@ param(
     })]
     $Databases,
     
-    [string[]]$ObjectTypes = @("Tables", "Views", "StoredProcedures", "Functions", "Triggers", "UserDefinedDataTypes", "UserDefinedTableTypes", "Schemas", "Users", "Roles", "Permissions"),
     
     [switch]$IncludeEncryption,
     
@@ -229,107 +226,65 @@ function Test-EncryptionSupport {
     }
 }
 
-function Copy-DatabaseObjects {
+function Copy-CompleteDatabase {
     param(
         $SourceConnection,
         $TargetConnection,
         [string]$DatabaseName,
-        [string[]]$ObjectTypes,
         [bool]$IncludeEncryption,
         [string]$OutputFile,
         [bool]$WhatIfMode
     )
     
-    Write-UpgradeLog "Processing database: $DatabaseName" -WriteToEventLog
+    Write-UpgradeLog "Migrating complete database: $DatabaseName" -WriteToEventLog
     
     try {
         # Check if database already exists on target (idempotent check)
         $targetDb = Get-DbaDatabase -SqlInstance $TargetConnection -Database $DatabaseName -ErrorAction SilentlyContinue
         
         if (-not $targetDb) {
-            Write-UpgradeLog "Creating database $DatabaseName on target instance"
+            Write-UpgradeLog "Migrating database $DatabaseName to target instance"
             
             if (-not $WhatIfMode) {
-                # Copy database structure
+                # Handle encryption/TDE before migration if needed
+                if ($IncludeEncryption) {
+                    $encryptionInfo = Test-EncryptionSupport -Connection $SourceConnection -DatabaseName $DatabaseName
+                    
+                    if ($encryptionInfo.HasTDE) {
+                        Write-UpgradeLog "Database $DatabaseName has TDE encryption - preparing TDE migration"
+                        # TDE certificate and key migration would be handled here before database copy
+                        # This is a placeholder for TDE-specific migration logic
+                    }
+                    
+                    if ($encryptionInfo.EncryptedObjectCount -gt 0) {
+                        Write-UpgradeLog "Found $($encryptionInfo.EncryptedObjectCount) encrypted objects in database $DatabaseName"
+                    }
+                }
+                
+                # Copy complete database using backup/restore method
+                Write-UpgradeLog "Starting complete database migration for $DatabaseName"
                 Copy-DbaDatabase -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName -BackupRestore -SharedPath "C:\Temp\SQLUpgrade" -Force
+                Write-UpgradeLog "Database $DatabaseName migration completed successfully"
+                
             } else {
-                Write-UpgradeLog "[WHATIF] Would create database $DatabaseName on target instance"
+                Write-UpgradeLog "[WHATIF] Would migrate complete database $DatabaseName to target instance"
+                if ($IncludeEncryption) {
+                    $encryptionInfo = Test-EncryptionSupport -Connection $SourceConnection -DatabaseName $DatabaseName
+                    if ($encryptionInfo.HasTDE) {
+                        Write-UpgradeLog "[WHATIF] Would handle TDE encryption migration for database $DatabaseName"
+                    }
+                    if ($encryptionInfo.EncryptedObjectCount -gt 0) {
+                        Write-UpgradeLog "[WHATIF] Would migrate $($encryptionInfo.EncryptedObjectCount) encrypted objects in database $DatabaseName"
+                    }
+                }
             }
         } else {
-            Write-UpgradeLog "Database $DatabaseName already exists on target instance - performing incremental sync"
-        }
-        
-        # Process each object type
-        foreach ($objectType in $ObjectTypes) {
-            Write-UpgradeLog "Processing $objectType for database $DatabaseName"
-            
-            switch ($objectType) {
-                "Tables" {
-                    if (-not $WhatIfMode) {
-                        Copy-DbaDbTable -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
-                    } else {
-                        Write-UpgradeLog "[WHATIF] Would copy tables for database $DatabaseName"
-                    }
-                }
-                "Views" {
-                    if (-not $WhatIfMode) {
-                        Copy-DbaDbView -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
-                    } else {
-                        Write-UpgradeLog "[WHATIF] Would copy views for database $DatabaseName"
-                    }
-                }
-                "StoredProcedures" {
-                    if (-not $WhatIfMode) {
-                        Copy-DbaDbStoredProcedure -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
-                    } else {
-                        Write-UpgradeLog "[WHATIF] Would copy stored procedures for database $DatabaseName"
-                    }
-                }
-                "Functions" {
-                    if (-not $WhatIfMode) {
-                        Copy-DbaDbFunction -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
-                    } else {
-                        Write-UpgradeLog "[WHATIF] Would copy functions for database $DatabaseName"
-                    }
-                }
-                "Users" {
-                    if (-not $WhatIfMode) {
-                        Copy-DbaDbUser -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
-                    } else {
-                        Write-UpgradeLog "[WHATIF] Would copy users for database $DatabaseName"
-                    }
-                }
-                "Roles" {
-                    if (-not $WhatIfMode) {
-                        Copy-DbaDbRole -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName
-                    } else {
-                        Write-UpgradeLog "[WHATIF] Would copy roles for database $DatabaseName"
-                    }
-                }
-            }
-        }
-        
-        # Handle encryption if requested
-        if ($IncludeEncryption) {
-            $encryptionInfo = Test-EncryptionSupport -Connection $SourceConnection -DatabaseName $DatabaseName
-            
-            if ($encryptionInfo.HasTDE) {
-                Write-UpgradeLog "Database $DatabaseName has TDE encryption - handling TDE migration"
-                if (-not $WhatIfMode) {
-                    # TDE migration logic would go here
-                    Write-UpgradeLog "TDE migration for $DatabaseName completed"
-                } else {
-                    Write-UpgradeLog "[WHATIF] Would migrate TDE encryption for database $DatabaseName"
-                }
-            }
-            
-            if ($encryptionInfo.EncryptedObjectCount -gt 0) {
-                Write-UpgradeLog "Found $($encryptionInfo.EncryptedObjectCount) encrypted objects in database $DatabaseName"
-            }
+            Write-UpgradeLog "Database $DatabaseName already exists on target instance - skipping migration (idempotent)"
+            Write-UpgradeLog "Note: For incremental updates, consider using database synchronization tools"
         }
         
     } catch {
-        Write-UpgradeLog "Error processing database $DatabaseName : $($_.Exception.Message)" -Level "Error" -WriteToEventLog
+        Write-UpgradeLog "Error migrating database $DatabaseName : $($_.Exception.Message)" -Level "Error" -WriteToEventLog
         throw
     }
 }
@@ -427,7 +382,7 @@ try {
     $processedDatabases = @()
     foreach ($database in $databasesToProcess) {
         try {
-            Copy-DatabaseObjects -SourceConnection $sourceConnection -TargetConnection $targetConnection -DatabaseName $database.Name -ObjectTypes $ObjectTypes -IncludeEncryption $IncludeEncryption -OutputFile $OutputFile -WhatIfMode $WhatIf
+            Copy-CompleteDatabase -SourceConnection $sourceConnection -TargetConnection $targetConnection -DatabaseName $database.Name -IncludeEncryption $IncludeEncryption -OutputFile $OutputFile -WhatIfMode $WhatIf
             $processedDatabases += $database.Name
         } catch {
             Write-UpgradeLog "Failed to process database $($database.Name): $($_.Exception.Message)" -Level "Error" -WriteToEventLog

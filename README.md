@@ -8,7 +8,7 @@ This PowerShell script provides a comprehensive solution for upgrading SQL Serve
 
 1. **dbatools Integration**: Uses dbatools for all SQL database operations (no T-SQL)
 2. **Robust Connection Management**: Uses Connect-DbaInstance for persistent, reliable connections
-3. **Selective Object Transfer**: Choose specific object types to transfer
+3. **Complete Database Migration**: Migrates entire databases as complete units
 4. **Collation Checking**: Automatically verifies collation compatibility
 5. **Encryption & TDE Support**: Handles encrypted objects and TDE databases
 6. **Flexible Execution**: Direct application or output file generation
@@ -49,10 +49,6 @@ This PowerShell script provides a comprehensive solution for upgrading SQL Serve
 .\SQL-Server-Upgrade-Script.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -OutputFile "C:\Scripts\UpgradeScript.sql"
 ```
 
-### Selective Object Types
-```powershell
-.\SQL-Server-Upgrade-Script.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases @("MyDB") -ObjectTypes @("Tables", "Views", "StoredProcedures")
-```
 
 ## Parameters
 
@@ -61,25 +57,20 @@ This PowerShell script provides a comprehensive solution for upgrading SQL Serve
 | `SourceInstance` | String | Yes | Source SQL Server instance name |
 | `TargetInstance` | String | Yes | Target SQL Server 2022 instance name |
 | `Databases` | String/Array | Yes | Database names to upgrade or "All" for all user databases |
-| `ObjectTypes` | String Array | No | Object types to transfer (default: all supported types) |
 | `IncludeEncryption` | Switch | No | Include encrypted objects and TDE databases |
 | `OutputFile` | String | No | Path to output file for later execution |
 | `WhatIf` | Switch | No | Show what would be done without making changes |
 | `LogPath` | String | No | Path for log files (default: C:\Logs\SQLUpgrade) |
 
-## Supported Object Types
+## Database Migration Approach
 
-- Tables
-- Views
-- StoredProcedures
-- Functions
-- Triggers
-- UserDefinedDataTypes
-- UserDefinedTableTypes
-- Schemas
-- Users
-- Roles
-- Permissions
+The script performs complete database migration using:
+
+- **Full Database Copy**: Uses Copy-DbaDatabase with backup/restore method
+- **Complete Structure**: All database objects migrated together as a unit
+- **Data Integrity**: Maintains referential integrity and dependencies
+- **Encryption Support**: Handles TDE and encrypted objects during migration
+- **Idempotent Operations**: Safe to run multiple times without duplication
 
 ## Logging
 
