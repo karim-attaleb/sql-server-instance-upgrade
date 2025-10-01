@@ -1,24 +1,37 @@
-# SQL Server 2022 Upgrade Script
+# SQL Server 2022 Upgrade Solution - Modular Architecture
 
-This PowerShell script provides a comprehensive solution for upgrading SQL Server instances to SQL Server 2022 using a side-by-side installation approach with dbatools.
+A comprehensive PowerShell solution for upgrading SQL Server instances to SQL Server 2022 using a side-by-side installation approach with dbatools. Built with a modular architecture similar to dbatools for maximum maintainability and reusability.
 
 ## Features
 
 ✅ **All Requirements Met:**
 
 1. **dbatools Integration**: Uses dbatools for all SQL database operations (no T-SQL)
-2. **Robust Connection Management**: Uses Connect-DbaInstance for persistent, reliable connections
-3. **Complete Database Migration**: Migrates entire databases as complete units
-4. **Collation Checking**: Automatically verifies collation compatibility
-5. **Encryption & TDE Support**: Handles encrypted objects and TDE databases
-6. **Flexible Execution**: Direct application or output file generation
-7. **WhatIf Support**: Preview changes without execution
-8. **Safe Operations**: Never drops anything, only adds objects
-9. **Database Selection**: Choose specific databases or all user databases
-10. **Idempotent**: Safe to run multiple times
+2. **Modular Design**: Organized into separate functional modules like dbatools
+3. **Robust Connection Management**: Uses Connect-DbaInstance for persistent, reliable connections
+4. **Complete Database Migration**: Migrates entire databases as complete units
+5. **Collation Checking**: Automatically verifies collation compatibility
+6. **Encryption & TDE Support**: Handles encrypted objects and TDE databases
+7. **Flexible Execution**: Direct application or output file generation
+8. **WhatIf Support**: Preview changes without execution
+9. **Safe Operations**: Never drops anything, only adds objects
+10. **Database Selection**: Choose specific databases or all user databases
+11. **Idempotent**: Safe to run multiple times
+
+## Modular Architecture
+
+The solution is organized into the following modules:
+
+- **SQLUpgrade.Logging.psm1**: Centralized logging functionality with file and Windows Event Log support
+- **SQLUpgrade.Connection.psm1**: Connection management and collation compatibility testing
+- **SQLUpgrade.Database.psm1**: Database enumeration and filtering
+- **SQLUpgrade.Encryption.psm1**: Encryption and TDE detection and handling
+- **SQLUpgrade.Migration.psm1**: Complete database migration logic
+- **SQLUpgrade.PostUpgrade.psm1**: Post-upgrade maintenance tasks
 
 ## Additional Features
 
+- **Modular Design**: Each functional area is separated into its own module for better maintainability
 - **Robust Connection Objects**: Establishes persistent connections using Connect-DbaInstance for better reliability
 - **Comprehensive Logging**: File-based and Windows Event Log integration
 - **Post-Upgrade Tasks**: Integrity checks, compatibility level updates, statistics, index rebuilds
@@ -36,17 +49,30 @@ This PowerShell script provides a comprehensive solution for upgrading SQL Serve
 
 ### Basic Usage with WhatIf
 ```powershell
-.\SQL-Server-Upgrade-Script.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases @("Database1", "Database2") -WhatIf
+.\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases @("Database1", "Database2") -WhatIf
 ```
 
 ### Complete Upgrade with All Databases
 ```powershell
-.\SQL-Server-Upgrade-Script.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeEncryption
+.\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeEncryption
 ```
 
 ### Generate Script File for Later Execution
 ```powershell
-.\SQL-Server-Upgrade-Script.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -OutputFile "C:\Scripts\UpgradeScript.sql"
+.\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -OutputFile "C:\Scripts\UpgradeScript.sql"
+```
+
+### Using Individual Modules
+```powershell
+# Import specific modules for custom workflows
+Import-Module .\Modules\SQLUpgrade.Logging.psm1
+Import-Module .\Modules\SQLUpgrade.Connection.psm1
+
+# Initialize logging
+$logInfo = Initialize-UpgradeLogging -LogPath "C:\Logs\CustomUpgrade"
+
+# Test connectivity
+$connection = Test-InstanceConnectivity -Instance "SQL2019\INSTANCE1" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
 ```
 
 
@@ -107,14 +133,36 @@ Automatically performs:
 
 ## Installation
 
-1. Install dbatools module:
+1. **Install dbatools module**:
    ```powershell
    Install-Module dbatools -Force
    ```
 
-2. Download the script to your desired location
+2. **Download the solution** to your preferred location, ensuring the Modules folder structure is preserved
 
-3. Run with appropriate parameters
+3. **Ensure you have appropriate permissions**:
+   - SQL Server sysadmin rights on both source and target instances
+   - Windows administrative privileges for Event Log access
+   - Network connectivity between instances
+
+## File Structure
+
+```
+SQL-Server-Upgrade-Solution/
+├── Start-SQLServerUpgrade.ps1          # Main orchestrator script
+├── Modules/                             # PowerShell modules
+│   ├── SQLUpgrade.Logging.psm1         # Logging functionality
+│   ├── SQLUpgrade.Connection.psm1      # Connection management
+│   ├── SQLUpgrade.Database.psm1        # Database operations
+│   ├── SQLUpgrade.Encryption.psm1      # Encryption handling
+│   ├── SQLUpgrade.Migration.psm1       # Database migration
+│   └── SQLUpgrade.PostUpgrade.psm1     # Post-upgrade tasks
+├── README.md                            # This documentation
+├── README-Modules.md                    # Detailed module documentation
+└── Usage-Examples.ps1                   # Usage examples
+```
+
+4. **Run with appropriate parameters**
 
 ## Support
 
