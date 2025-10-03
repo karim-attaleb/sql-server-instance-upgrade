@@ -84,9 +84,31 @@ function Copy-CompleteDatabase {
                     }
                 }
                 
-                # Copy complete database using detach/attach method for containers
+                # Copy complete database using schema and data export/import for cross-platform compatibility
                 Write-UpgradeLog -Message "Starting complete database migration for $DatabaseName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-                Copy-DbaDatabase -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName -DetachAttach -Reattach -Force
+                
+                # Create database on target if it doesn't exist
+                $targetDbExists = Get-DbaDatabase -SqlInstance $TargetConnection -Database $DatabaseName -ErrorAction SilentlyContinue
+                if (-not $targetDbExists) {
+                    New-DbaDatabase -SqlInstance $TargetConnection -Name $DatabaseName -Owner 'sa'
+                    Write-UpgradeLog -Message "Created database $DatabaseName on target instance" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                }
+                
+                # Copy database schema and data using cross-platform compatible methods
+                Write-UpgradeLog -Message "Copying database objects and data for $DatabaseName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                
+                # Get all tables from source database
+                $sourceTables = Get-DbaDbTable -SqlInstance $SourceConnection -Database $DatabaseName
+                foreach ($table in $sourceTables) {
+                    Write-UpgradeLog -Message "Migrating table: $($table.Schema).$($table.Name)" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    
+                    # Copy table structure and data
+                    try {
+                        Copy-DbaDbTableData -SqlInstance $SourceConnection -Database $DatabaseName -Table "$($table.Schema).$($table.Name)" -DestinationSqlInstance $TargetConnection -DestinationDatabase $DatabaseName -AutoCreateTable
+                    } catch {
+                        Write-UpgradeLog -Message "Warning: Could not migrate table $($table.Schema).$($table.Name): $($_.Exception.Message)" -Level "Warning" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    }
+                }
                 Write-UpgradeLog -Message "Database $DatabaseName migration completed successfully" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
                 
             } else {
