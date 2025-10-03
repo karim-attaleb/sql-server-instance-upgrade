@@ -30,6 +30,24 @@
 .PARAMETER LogPath
     Path for detailed log files (default: C:\Logs\SQLUpgrade)
 
+.PARAMETER MigrationMethod
+    Migration method: 'Direct' (default), 'BackupRestore', or 'DetachAttach'
+
+.PARAMETER BackupPath
+    Path for backup files (required for BackupRestore method when creating new backups)
+
+.PARAMETER UseExistingBackups
+    Use existing backup files instead of creating new ones
+
+.PARAMETER FullBackupPath
+    Path to existing full backup file
+
+.PARAMETER DifferentialBackupPath
+    Path to existing differential backup file
+
+.PARAMETER LogBackupPaths
+    Array of paths to existing log backup files
+
 .PARAMETER IncludeLogins
     Migrate SQL Server logins (excluding system logins)
 
@@ -77,6 +95,12 @@
 
 .EXAMPLE
     .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeLogins -IncludeJobs -IncludeLinkedServers
+
+.EXAMPLE
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -MigrationMethod BackupRestore -BackupPath "C:\Backups"
+
+.EXAMPLE
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases @("MyDB") -MigrationMethod BackupRestore -UseExistingBackups -FullBackupPath "C:\Backups\MyDB_Full.bak" -DifferentialBackupPath "C:\Backups\MyDB_Diff.bak" -LogBackupPaths @("C:\Backups\MyDB_Log1.trn", "C:\Backups\MyDB_Log2.trn")
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -89,7 +113,7 @@ param(
     
     [Parameter(Mandatory = $true)]
     [ValidateScript({
-        if ($_ -eq "All" -or ($_ -is [array] -and $_.Count -gt 0)) {
+        if ($_ -eq "All" -or ($_ -is [array] -and $_.Count -gt 0) -or ($_ -is [string] -and $_ -ne "")) {
             $true
         } else {
             throw "Databases must be 'All' or an array of database names"
@@ -99,7 +123,17 @@ param(
     
     [switch]$IncludeEncryption,
     [string]$OutputFile,
-    [string]$LogPath = "C:\Logs\SQLUpgrade",
+    [string]$LogPath = "/tmp/SQLUpgrade",
+    
+    # Migration Method Options
+    [ValidateSet('Direct', 'BackupRestore', 'DetachAttach')]
+    [string]$MigrationMethod = 'Direct',
+    
+    [string]$BackupPath,
+    [switch]$UseExistingBackups,
+    [string]$FullBackupPath,
+    [string]$DifferentialBackupPath,
+    [string[]]$LogBackupPaths,
     
     # Server Object Migration Switches
     [switch]$IncludeLogins,
@@ -162,7 +196,7 @@ try {
     $processedDatabases = @()
     foreach ($database in $databasesToProcess) {
         try {
-            Copy-CompleteDatabase -SourceConnection $sourceConnection -TargetConnection $targetConnection -DatabaseName $database.Name -IncludeEncryption $IncludeEncryption -OutputFile $OutputFile -WhatIfMode $WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+            Copy-CompleteDatabase -SourceConnection $sourceConnection -TargetConnection $targetConnection -DatabaseName $database.Name -IncludeEncryption $IncludeEncryption -MigrationMethod $MigrationMethod -BackupPath $BackupPath -UseExistingBackups $UseExistingBackups -FullBackupPath $FullBackupPath -DifferentialBackupPath $DifferentialBackupPath -LogBackupPaths $LogBackupPaths -OutputFile $OutputFile -WhatIfMode $WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
             $processedDatabases += $database.Name
         } catch {
             Write-UpgradeLog -Message "Failed to process database $($database.Name): $($_.Exception.Message)" -Level "Error" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile -WriteToEventLog
