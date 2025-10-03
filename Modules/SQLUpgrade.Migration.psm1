@@ -104,7 +104,7 @@ function Copy-CompleteDatabase {
                     
                     # Copy table structure and data
                     try {
-                        Copy-DbaDbTableData -SqlInstance $SourceConnection -Database $DatabaseName -Table "$($table.Schema).$($table.Name)" -DestinationSqlInstance $TargetConnection -DestinationDatabase $DatabaseName -AutoCreateTable
+                        Copy-DbaDbTableData -SqlInstance $SourceConnection -Database $DatabaseName -Table "$($table.Schema).$($table.Name)" -Destination $TargetConnection -DestinationDatabase $DatabaseName -AutoCreateTable
                     } catch {
                         Write-UpgradeLog -Message "Warning: Could not migrate table $($table.Schema).$($table.Name): $($_.Exception.Message)" -Level "Warning" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
                     }
