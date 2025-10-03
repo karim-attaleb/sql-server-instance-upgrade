@@ -117,25 +117,28 @@ function Copy-CompleteDatabase {
     }
     
     try {
-        # Check if database already exists on target (idempotent check)
-        $targetDb = Get-DbaDatabase -SqlInstance $TargetConnection -Database $DatabaseName -ErrorAction SilentlyContinue
-        if ($targetDb) {
-            Write-UpgradeLog -Message "Database $DatabaseName already exists on target instance - skipping migration (idempotent)" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-            return
-        }
-        
-        # Handle encryption/TDE before migration if needed
-        if ($IncludeEncryption) {
-            $encryptionInfo = Test-EncryptionSupport -Connection $SourceConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-            
-            if ($encryptionInfo.HasTDE) {
-                Write-UpgradeLog -Message "Database $DatabaseName has TDE encryption - preparing TDE migration" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-                # TDE certificate and key migration would be handled here before database copy
-                # This is a placeholder for TDE-specific migration logic
+        # Skip database existence check and encryption handling for OutputFile mode
+        if (-not $OutputFile) {
+            # Check if database already exists on target (idempotent check)
+            $targetDb = Get-DbaDatabase -SqlInstance $TargetConnection -Database $DatabaseName -ErrorAction SilentlyContinue
+            if ($targetDb) {
+                Write-UpgradeLog -Message "Database $DatabaseName already exists on target instance - skipping migration (idempotent)" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                return
             }
             
-            if ($encryptionInfo.EncryptedObjectCount -gt 0) {
-                Write-UpgradeLog -Message "Found $($encryptionInfo.EncryptedObjectCount) encrypted objects in database $DatabaseName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+            # Handle encryption/TDE before migration if needed
+            if ($IncludeEncryption) {
+                $encryptionInfo = Test-EncryptionSupport -Connection $SourceConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                
+                if ($encryptionInfo.HasTDE) {
+                    Write-UpgradeLog -Message "Database $DatabaseName has TDE encryption - preparing TDE migration" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    # TDE certificate and key migration would be handled here before database copy
+                    # This is a placeholder for TDE-specific migration logic
+                }
+                
+                if ($encryptionInfo.EncryptedObjectCount -gt 0) {
+                    Write-UpgradeLog -Message "Found $($encryptionInfo.EncryptedObjectCount) encrypted objects in database $DatabaseName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                }
             }
         }
         
@@ -143,11 +146,14 @@ function Copy-CompleteDatabase {
         if ($OutputFile) {
             Write-UpgradeLog -Message "Generating SQL script for database $DatabaseName migration to: $OutputFile" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             
+            $sourceInstanceName = if ($SourceConnection.InstanceName) { $SourceConnection.InstanceName } else { $SourceConnection.ComputerName }
+            $targetInstanceName = if ($TargetConnection.InstanceName) { $TargetConnection.InstanceName } else { $TargetConnection.ComputerName }
+            
             $sqlScript = @"
 -- SQL Server Database Migration Script for: $DatabaseName
 -- Generated on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
--- Source Instance: $($SourceConnection.Name)
--- Target Instance: $($TargetConnection.Name)
+-- Source Instance: $sourceInstanceName
+-- Target Instance: $targetInstanceName
 -- Migration Method: $MigrationMethod
 
 "@
@@ -293,31 +299,33 @@ GO
             return
         }
         
-        # Execute migration based on selected method
-        switch ($MigrationMethod) {
-            'BackupRestore' {
-                if ($UseExistingBackups) {
-                    Restore-DatabaseFromExistingBackups -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -FullBackupPath $FullBackupPath -DifferentialBackupPath $DifferentialBackupPath -LogBackupPaths $LogBackupPaths -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-                } else {
-                    Restore-DatabaseFromNewBackups -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -BackupPath $BackupPath -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+        # Execute migration based on selected method (skip for OutputFile mode)
+        if (-not $OutputFile) {
+            switch ($MigrationMethod) {
+                'BackupRestore' {
+                    if ($UseExistingBackups) {
+                        Restore-DatabaseFromExistingBackups -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -FullBackupPath $FullBackupPath -DifferentialBackupPath $DifferentialBackupPath -LogBackupPaths $LogBackupPaths -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    } else {
+                        Restore-DatabaseFromNewBackups -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -BackupPath $BackupPath -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    }
                 }
-            }
-            'DetachAttach' {
-                Copy-DatabaseDetachAttach -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-            }
-            'Direct' {
-                # Primary method: Use Copy-DbaDatabase for complete database migration
-                try {
-                    Write-UpgradeLog -Message "Attempting complete database migration using Copy-DbaDatabase" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-                    Copy-DbaDatabase -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName -BackupRestore -SharedPath "/tmp/SQLUpgrade" -Force
-                    Write-UpgradeLog -Message "Successfully migrated database $DatabaseName using Copy-DbaDatabase" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
-                    return
-                } catch {
-                    Write-UpgradeLog -Message "Copy-DbaDatabase failed: $($_.Exception.Message). Falling back to table-by-table migration." -Level "Warning" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                'DetachAttach' {
+                    Copy-DatabaseDetachAttach -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
                 }
-                
-                # Fallback method: Table-by-table migration
-                Copy-DatabaseTableByTable -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                'Direct' {
+                    # Primary method: Use Copy-DbaDatabase for complete database migration
+                    try {
+                        Write-UpgradeLog -Message "Attempting complete database migration using Copy-DbaDatabase" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                        Copy-DbaDatabase -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName -BackupRestore -SharedPath "/tmp/SQLUpgrade" -Force
+                        Write-UpgradeLog -Message "Successfully migrated database $DatabaseName using Copy-DbaDatabase" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
+                        return
+                    } catch {
+                        Write-UpgradeLog -Message "Copy-DbaDatabase failed: $($_.Exception.Message). Falling back to table-by-table migration." -Level "Warning" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    }
+                    
+                    # Fallback method: Table-by-table migration
+                    Copy-DatabaseTableByTable -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                }
             }
         }
         
