@@ -48,11 +48,11 @@ function Copy-CompleteDatabase {
         [Parameter(Mandatory = $true)]
         [string]$DatabaseName,
         
-        [bool]$IncludeEncryption,
+        [switch]$IncludeEncryption,
         
         [string]$OutputFile,
         
-        [bool]$WhatIfMode,
+        [switch]$WhatIfMode,
         
         [string]$LogFile,
         

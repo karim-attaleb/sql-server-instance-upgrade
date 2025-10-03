@@ -249,8 +249,8 @@ Describe "Main Script Integration Tests" {
         }
         
         It "Should contain NO function definitions" {
-            $script:MainScriptContent | Should -Not -Match "^function "
-            $script:MainScriptContent | Should -Not -Match "function\s+\w+"
+            $script:MainScriptContent | Should -Not -Match "^\s*function\s+\w+"
+            $script:MainScriptContent | Should -Not -Match "\n\s*function\s+\w+"
         }
         
         It "Should import all required modules" {
@@ -272,12 +272,12 @@ Describe "Main Script Integration Tests" {
         }
         
         It "Should have all required parameters" {
-            $script:MainScriptContent | Should -Match "\$SourceInstance"
-            $script:MainScriptContent | Should -Match "\$TargetInstance"
-            $script:MainScriptContent | Should -Match "\$Databases"
-            $script:MainScriptContent | Should -Match "\$IncludeEncryption"
-            $script:MainScriptContent | Should -Match "\$WhatIf"
-            $script:MainScriptContent | Should -Match "\$LogPath"
+            $script:MainScriptContent | Should -Match "\`$SourceInstance"
+            $script:MainScriptContent | Should -Match "\`$TargetInstance"
+            $script:MainScriptContent | Should -Match "\`$Databases"
+            $script:MainScriptContent | Should -Match "\`$IncludeEncryption"
+            $script:MainScriptContent | Should -Match "\`$WhatIf"
+            $script:MainScriptContent | Should -Match "\`$LogPath"
         }
         
         It "Should call module functions only" {

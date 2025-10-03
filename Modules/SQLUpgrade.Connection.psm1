@@ -42,7 +42,7 @@ function Test-InstanceConnectivity {
             return $connection
         }
     } catch {
-        Write-UpgradeLog -Message "Failed to connect to $Instance : $($_.Exception.Message)" -Level "Error" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
+        Write-UpgradeLog -Message "Failed to connect to $Instance : $($_.Exception.Message)" -Level "Error" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
         return $null
     }
 }

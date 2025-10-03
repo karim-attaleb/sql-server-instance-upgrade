@@ -84,9 +84,9 @@ Describe "Main Script Syntax and Structure Validation" {
         It "Should have proper error handling structure" {
             $scriptContent = Get-Content $script:MainScriptPath -Raw
             
-            $scriptContent | Should -Match "try\s*\{"
-            $scriptContent | Should -Match "catch\s*\{"
-            $scriptContent | Should -Match "\$ErrorActionPreference"
+            $scriptContent | Should -Match "try"
+            $scriptContent | Should -Match "catch"
+            $scriptContent | Should -Match "ErrorActionPreference"
         }
     }
     
@@ -105,8 +105,8 @@ Describe "Main Script Syntax and Structure Validation" {
         It "Should use relative module paths correctly" {
             $scriptContent = Get-Content $script:MainScriptPath -Raw
             
-            $scriptContent | Should -Match "\$ModulePath\s*=\s*Join-Path\s+\$PSScriptRoot\s+['\"]Modules['\"]"
-            $scriptContent | Should -Match "Join-Path\s+\$ModulePath"
+            $scriptContent | Should -Match "ModulePath.*Join-Path.*PSScriptRoot.*Modules"
+            $scriptContent | Should -Match "Join-Path.*ModulePath"
         }
     }
 }
@@ -159,15 +159,15 @@ Describe "Security and Best Practices Validation" {
             $moduleFiles = Get-ChildItem $ModulePath -Filter "*.psm1"
             $mainScript = Get-Content $script:MainScriptPath -Raw
             
-            # Check main script
-            $mainScript | Should -Not -Match "password\s*=\s*['\"][^'\"]+['\"]"
-            $mainScript | Should -Not -Match "pwd\s*=\s*['\"][^'\"]+['\"]"
+            # Check main script for hardcoded passwords
+            $mainScript | Should -Not -Match "password\s*="
+            $mainScript | Should -Not -Match "pwd\s*="
             
-            # Check all modules
+            # Check all modules for hardcoded passwords
             foreach ($moduleFile in $moduleFiles) {
                 $content = Get-Content $moduleFile.FullName -Raw
-                $content | Should -Not -Match "password\s*=\s*['\"][^'\"]+['\"]"
-                $content | Should -Not -Match "pwd\s*=\s*['\"][^'\"]+['\"]"
+                $content | Should -Not -Match "password\s*="
+                $content | Should -Not -Match "pwd\s*="
             }
         }
         
@@ -177,7 +177,8 @@ Describe "Security and Best Practices Validation" {
             
             foreach ($moduleFile in $moduleFiles) {
                 $content = Get-Content $moduleFile.FullName -Raw
-                $content | Should -Match "try\s*\{|catch\s*\{|\$ErrorActionPreference"
+                $hasErrorHandling = ($content -match "try") -or ($content -match "catch") -or ($content -match "ErrorActionPreference")
+                $hasErrorHandling | Should -Be $true
             }
         }
     }

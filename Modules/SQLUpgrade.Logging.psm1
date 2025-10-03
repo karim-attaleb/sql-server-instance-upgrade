@@ -35,7 +35,7 @@ function Initialize-UpgradeLogging {
     }
 
     $LogFile = Join-Path $LogPath "SQLUpgrade_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
-    $ErrorLogFile = Join-Path $LogPath "SQLUpgrade_Errors_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+    $ErrorLogFile = Join-Path $LogPath "SQLUpgrade_Error_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 
     # Event Log setup
     try {
@@ -87,7 +87,13 @@ function Write-UpgradeLog {
     )
     
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $LogMessage = "[$Timestamp] [$Level] $Message"
+    # Convert level to abbreviated format for consistency
+    $logLevel = switch ($Level) {
+        "Information" { "INFO" }
+        "Warning" { "WARN" }
+        "Error" { "ERROR" }
+    }
+    $LogMessage = "[$Timestamp] [$logLevel] $Message"
     
     # Write to console
     switch ($Level) {

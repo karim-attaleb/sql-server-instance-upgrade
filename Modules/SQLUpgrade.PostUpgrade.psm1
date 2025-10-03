@@ -36,7 +36,7 @@ function Invoke-PostUpgradeTasks {
         [Parameter(Mandatory = $true)]
         [string[]]$DatabaseNames,
         
-        [bool]$WhatIfMode,
+        [switch]$WhatIfMode,
         
         [string]$LogFile,
         
