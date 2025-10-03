@@ -185,6 +185,10 @@ Describe "SQLUpgrade.Migration Module Tests" {
         It "Should export Copy-CompleteDatabase function" {
             Get-Command Copy-CompleteDatabase -ErrorAction SilentlyContinue | Should -Not -BeNullOrEmpty
         }
+        
+        It "Should export Copy-ServerObjects function" {
+            Get-Command Copy-ServerObjects -ErrorAction SilentlyContinue | Should -Not -BeNullOrEmpty
+        }
     }
     
     Context "Copy-CompleteDatabase Function" {
@@ -203,6 +207,30 @@ Describe "SQLUpgrade.Migration Module Tests" {
             $command = Get-Command Copy-CompleteDatabase
             $command.Parameters["WhatIfMode"] | Should -Not -BeNullOrEmpty
             $command.Parameters["WhatIfMode"].ParameterType | Should -Be ([switch])
+        }
+    }
+    
+    Context "Copy-ServerObjects Function" {
+        It "Should have proper parameter validation" {
+            $command = Get-Command Copy-ServerObjects
+            $command.Parameters.Keys | Should -Contain "SourceConnection"
+            $command.Parameters.Keys | Should -Contain "TargetConnection"
+            $command.Parameters.Keys | Should -Contain "ServerObjectOptions"
+            $command.Parameters.Keys | Should -Contain "WhatIfMode"
+            $command.Parameters.Keys | Should -Contain "LogFile"
+            $command.Parameters.Keys | Should -Contain "ErrorLogFile"
+        }
+        
+        It "Should support WhatIf functionality" {
+            $command = Get-Command Copy-ServerObjects
+            $command.Parameters["WhatIfMode"] | Should -Not -BeNullOrEmpty
+            $command.Parameters["WhatIfMode"].ParameterType | Should -Be ([switch])
+        }
+        
+        It "Should require ServerObjectOptions hashtable parameter" {
+            $command = Get-Command Copy-ServerObjects
+            $command.Parameters["ServerObjectOptions"] | Should -Not -BeNullOrEmpty
+            $command.Parameters["ServerObjectOptions"].ParameterType | Should -Be ([hashtable])
         }
     }
 }
@@ -280,12 +308,28 @@ Describe "Main Script Integration Tests" {
             $script:MainScriptContent | Should -Match "\`$LogPath"
         }
         
+        It "Should have server object migration parameters" {
+            $script:MainScriptContent | Should -Match "\`$IncludeLogins"
+            $script:MainScriptContent | Should -Match "\`$IncludeJobs"
+            $script:MainScriptContent | Should -Match "\`$IncludeLinkedServers"
+            $script:MainScriptContent | Should -Match "\`$IncludeTriggers"
+            $script:MainScriptContent | Should -Match "\`$IncludeServerRoles"
+            $script:MainScriptContent | Should -Match "\`$IncludeCredentials"
+            $script:MainScriptContent | Should -Match "\`$IncludeProxyAccounts"
+            $script:MainScriptContent | Should -Match "\`$IncludeAlerts"
+            $script:MainScriptContent | Should -Match "\`$IncludeOperators"
+            $script:MainScriptContent | Should -Match "\`$IncludeBackupDevices"
+            $script:MainScriptContent | Should -Match "\`$IncludeServerConfiguration"
+            $script:MainScriptContent | Should -Match "\`$IncludeAllServerObjects"
+        }
+        
         It "Should call module functions only" {
             $script:MainScriptContent | Should -Match "Initialize-UpgradeLogging"
             $script:MainScriptContent | Should -Match "Test-InstanceConnectivity"
             $script:MainScriptContent | Should -Match "Test-CollationCompatibility"
             $script:MainScriptContent | Should -Match "Get-UserDatabases"
             $script:MainScriptContent | Should -Match "Copy-CompleteDatabase"
+            $script:MainScriptContent | Should -Match "Copy-ServerObjects"
             $script:MainScriptContent | Should -Match "Invoke-PostUpgradeTasks"
         }
     }
@@ -340,6 +384,7 @@ Describe "Module Architecture Validation" {
             # Check Migration module
             $migrationContent = Get-Content (Join-Path $ModulePath "SQLUpgrade.Migration.psm1") -Raw
             $migrationContent | Should -Match "function Copy-CompleteDatabase"
+            $migrationContent | Should -Match "function Copy-ServerObjects"
             
             # Check PostUpgrade module
             $postUpgradeContent = Get-Content (Join-Path $ModulePath "SQLUpgrade.PostUpgrade.psm1") -Raw

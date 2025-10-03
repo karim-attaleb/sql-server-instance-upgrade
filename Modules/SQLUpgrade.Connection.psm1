@@ -36,7 +36,9 @@ function Test-InstanceConnectivity {
     )
     
     try {
-        $connection = Connect-DbaInstance -SqlInstance $Instance -ConnectTimeout 10
+        # Use TrustServerCertificate and SQL credentials for container connections
+        $sqlCredential = New-Object System.Management.Automation.PSCredential("sa", (ConvertTo-SecureString "YourStrong@Passw0rd" -AsPlainText -Force))
+        $connection = Connect-DbaInstance -SqlInstance $Instance -SqlCredential $sqlCredential -TrustServerCertificate -ConnectTimeout 10
         if ($connection) {
             Write-UpgradeLog -Message "Successfully connected to $Instance" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
             return $connection

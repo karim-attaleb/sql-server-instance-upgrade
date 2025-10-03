@@ -29,12 +29,54 @@
     
 .PARAMETER LogPath
     Path for detailed log files (default: C:\Logs\SQLUpgrade)
+
+.PARAMETER IncludeLogins
+    Migrate SQL Server logins (excluding system logins)
+
+.PARAMETER IncludeJobs
+    Migrate SQL Server Agent jobs
+
+.PARAMETER IncludeLinkedServers
+    Migrate linked servers
+
+.PARAMETER IncludeTriggers
+    Migrate server-level triggers
+
+.PARAMETER IncludeServerRoles
+    Migrate custom server roles
+
+.PARAMETER IncludeCredentials
+    Migrate credentials
+
+.PARAMETER IncludeProxyAccounts
+    Migrate SQL Server Agent proxy accounts
+
+.PARAMETER IncludeAlerts
+    Migrate SQL Server Agent alerts
+
+.PARAMETER IncludeOperators
+    Migrate SQL Server Agent operators
+
+.PARAMETER IncludeBackupDevices
+    Migrate backup devices
+
+.PARAMETER IncludeServerConfiguration
+    Migrate server configuration settings
+
+.PARAMETER IncludeAllServerObjects
+    Migrate all server-level objects (equivalent to enabling all individual switches)
     
 .EXAMPLE
     .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases @("Database1", "Database2") -WhatIf
     
 .EXAMPLE
     .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeEncryption
+
+.EXAMPLE
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeAllServerObjects
+
+.EXAMPLE
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeLogins -IncludeJobs -IncludeLinkedServers
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -58,7 +100,20 @@ param(
     [switch]$IncludeEncryption,
     [string]$OutputFile,
     [string]$LogPath = "C:\Logs\SQLUpgrade",
-    [switch]$WhatIf
+    
+    # Server Object Migration Switches
+    [switch]$IncludeLogins,
+    [switch]$IncludeJobs,
+    [switch]$IncludeLinkedServers,
+    [switch]$IncludeTriggers,
+    [switch]$IncludeServerRoles,
+    [switch]$IncludeCredentials,
+    [switch]$IncludeProxyAccounts,
+    [switch]$IncludeAlerts,
+    [switch]$IncludeOperators,
+    [switch]$IncludeBackupDevices,
+    [switch]$IncludeServerConfiguration,
+    [switch]$IncludeAllServerObjects
 )
 
 $ErrorActionPreference = "Stop"
@@ -84,6 +139,26 @@ try {
     
     $databasesToProcess = Get-UserDatabases -Connection $sourceConnection -DatabaseFilter $Databases -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     
+    # Migrate server objects first (if requested)
+    if ($IncludeAllServerObjects -or $IncludeLogins -or $IncludeJobs -or $IncludeLinkedServers -or $IncludeTriggers -or $IncludeServerRoles -or $IncludeCredentials -or $IncludeProxyAccounts -or $IncludeAlerts -or $IncludeOperators -or $IncludeBackupDevices -or $IncludeServerConfiguration) {
+        $serverObjectOptions = @{
+            IncludeLogins = $IncludeLogins -or $IncludeAllServerObjects
+            IncludeJobs = $IncludeJobs -or $IncludeAllServerObjects
+            IncludeLinkedServers = $IncludeLinkedServers -or $IncludeAllServerObjects
+            IncludeTriggers = $IncludeTriggers -or $IncludeAllServerObjects
+            IncludeServerRoles = $IncludeServerRoles -or $IncludeAllServerObjects
+            IncludeCredentials = $IncludeCredentials -or $IncludeAllServerObjects
+            IncludeProxyAccounts = $IncludeProxyAccounts -or $IncludeAllServerObjects
+            IncludeAlerts = $IncludeAlerts -or $IncludeAllServerObjects
+            IncludeOperators = $IncludeOperators -or $IncludeAllServerObjects
+            IncludeBackupDevices = $IncludeBackupDevices -or $IncludeAllServerObjects
+            IncludeServerConfiguration = $IncludeServerConfiguration -or $IncludeAllServerObjects
+        }
+        
+        Copy-ServerObjects -SourceConnection $sourceConnection -TargetConnection $targetConnection -ServerObjectOptions $serverObjectOptions -OutputFile $OutputFile -WhatIfMode $WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+    }
+    
+    # Migrate databases
     $processedDatabases = @()
     foreach ($database in $databasesToProcess) {
         try {
@@ -94,6 +169,7 @@ try {
         }
     }
     
+    # Run post-upgrade tasks
     if ($processedDatabases.Count -gt 0 -and -not $WhatIf) {
         Invoke-PostUpgradeTasks -TargetConnection $targetConnection -DatabaseNames $processedDatabases -WhatIfMode $WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     }
