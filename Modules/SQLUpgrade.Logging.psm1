@@ -37,10 +37,14 @@ function Initialize-UpgradeLogging {
     $LogFile = Join-Path $LogPath "SQLUpgrade_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
     $ErrorLogFile = Join-Path $LogPath "SQLUpgrade_Error_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 
-    # Event Log setup
+    # Event Log setup (Windows only)
     try {
-        if (-not [System.Diagnostics.EventLog]::SourceExists($script:EventLogSource)) {
-            New-EventLog -LogName $script:EventLogName -Source $script:EventLogSource
+        # Check if running on Windows
+        if (($PSVersionTable.PSVersion.Major -ge 6 -and $IsWindows) -or 
+            ($PSVersionTable.PSVersion.Major -lt 6 -and $env:OS -eq "Windows_NT")) {
+            if (-not [System.Diagnostics.EventLog]::SourceExists($script:EventLogSource)) {
+                New-EventLog -LogName $script:EventLogName -Source $script:EventLogSource
+            }
         }
     } catch {
         Write-Warning "Could not create Event Log source. Running with limited logging."
@@ -111,14 +115,23 @@ function Write-UpgradeLog {
         Add-Content -Path $ErrorLogFile -Value $LogMessage
     }
     
-    # Write to Event Log
-    if ($WriteToEventLog -and [System.Diagnostics.EventLog]::SourceExists($script:EventLogSource)) {
-        $EventType = switch ($Level) {
-            "Information" { "Information" }
-            "Warning" { "Warning" }
-            "Error" { "Error" }
+    # Write to Event Log (Windows only)
+    if ($WriteToEventLog) {
+        try {
+            # Check if running on Windows and source exists
+            if ((($PSVersionTable.PSVersion.Major -ge 6 -and $IsWindows) -or 
+                 ($PSVersionTable.PSVersion.Major -lt 6 -and $env:OS -eq "Windows_NT")) -and
+                [System.Diagnostics.EventLog]::SourceExists($script:EventLogSource)) {
+                $EventType = switch ($Level) {
+                    "Information" { "Information" }
+                    "Warning" { "Warning" }
+                    "Error" { "Error" }
+                }
+                Write-EventLog -LogName $script:EventLogName -Source $script:EventLogSource -EntryType $EventType -EventId 1001 -Message $Message
+            }
+        } catch {
+            # Silently ignore EventLog errors on non-Windows platforms
         }
-        Write-EventLog -LogName $script:EventLogName -Source $script:EventLogSource -EntryType $EventType -EventId 1001 -Message $Message
     }
 }
 
