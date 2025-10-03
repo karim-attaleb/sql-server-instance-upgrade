@@ -84,9 +84,9 @@ function Copy-CompleteDatabase {
                     }
                 }
                 
-                # Copy complete database using backup/restore method
+                # Copy complete database using detach/attach method for containers
                 Write-UpgradeLog -Message "Starting complete database migration for $DatabaseName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-                Copy-DbaDatabase -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName -BackupRestore -SharedPath "/tmp/SQLUpgrade" -Force
+                Copy-DbaDatabase -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName -DetachAttach -Reattach -Force
                 Write-UpgradeLog -Message "Database $DatabaseName migration completed successfully" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
                 
             } else {
