@@ -117,25 +117,28 @@ function Copy-CompleteDatabase {
     }
     
     try {
-        # Check if database already exists on target (idempotent check)
-        $targetDb = Get-DbaDatabase -SqlInstance $TargetConnection -Database $DatabaseName -ErrorAction SilentlyContinue
-        if ($targetDb) {
-            Write-UpgradeLog -Message "Database $DatabaseName already exists on target instance - skipping migration (idempotent)" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-            return
-        }
-        
-        # Handle encryption/TDE before migration if needed
-        if ($IncludeEncryption) {
-            $encryptionInfo = Test-EncryptionSupport -Connection $SourceConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-            
-            if ($encryptionInfo.HasTDE) {
-                Write-UpgradeLog -Message "Database $DatabaseName has TDE encryption - preparing TDE migration" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-                # TDE certificate and key migration would be handled here before database copy
-                # This is a placeholder for TDE-specific migration logic
+        # Skip database existence check and encryption handling for OutputFile mode
+        if (-not $OutputFile) {
+            # Check if database already exists on target (idempotent check)
+            $targetDb = Get-DbaDatabase -SqlInstance $TargetConnection -Database $DatabaseName -ErrorAction SilentlyContinue
+            if ($targetDb) {
+                Write-UpgradeLog -Message "Database $DatabaseName already exists on target instance - skipping migration (idempotent)" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                return
             }
             
-            if ($encryptionInfo.EncryptedObjectCount -gt 0) {
-                Write-UpgradeLog -Message "Found $($encryptionInfo.EncryptedObjectCount) encrypted objects in database $DatabaseName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+            # Handle encryption/TDE before migration if needed
+            if ($IncludeEncryption) {
+                $encryptionInfo = Test-EncryptionSupport -Connection $SourceConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                
+                if ($encryptionInfo.HasTDE) {
+                    Write-UpgradeLog -Message "Database $DatabaseName has TDE encryption - preparing TDE migration" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    # TDE certificate and key migration would be handled here before database copy
+                    # This is a placeholder for TDE-specific migration logic
+                }
+                
+                if ($encryptionInfo.EncryptedObjectCount -gt 0) {
+                    Write-UpgradeLog -Message "Found $($encryptionInfo.EncryptedObjectCount) encrypted objects in database $DatabaseName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                }
             }
         }
         
@@ -143,181 +146,219 @@ function Copy-CompleteDatabase {
         if ($OutputFile) {
             Write-UpgradeLog -Message "Generating SQL script for database $DatabaseName migration to: $OutputFile" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             
-            $sqlScript = @"
--- SQL Server Database Migration Script for: $DatabaseName
--- Generated on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
--- Source Instance: $($SourceConnection.Name)
--- Target Instance: $($TargetConnection.Name)
--- Migration Method: $MigrationMethod
+            $sourceInstanceName = if ($SourceConnection.InstanceName) { $SourceConnection.InstanceName } else { $SourceConnection.ComputerName }
+            $targetInstanceName = if ($TargetConnection.InstanceName) { $TargetConnection.InstanceName } else { $TargetConnection.ComputerName }
+            
+            $psScript = @"
+# PowerShell Database Migration Script for: $DatabaseName
+# Generated on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+# Source Instance: $sourceInstanceName
+# Target Instance: $targetInstanceName
+# Migration Method: $MigrationMethod
+# Uses dbatools for all SQL Server operations
+
+# Import required module
+Import-Module dbatools -Force
+
+# Establish connections
+`$sourceConn = Connect-DbaInstance -SqlInstance '$sourceInstanceName'
+`$targetConn = Connect-DbaInstance -SqlInstance '$targetInstanceName'
+
+Write-Host "Starting migration of database: $DatabaseName" -ForegroundColor Green
 
 "@
             
             switch ($MigrationMethod) {
                 'BackupRestore' {
                     if ($UseExistingBackups) {
-                        $sqlScript += @"
--- Restore database from existing backups
-USE [master]
-GO
-
+                        $psScript += @"
+# Restore from existing backup files using dbatools
+try {
+    Write-Host "Restoring from existing backup chain" -ForegroundColor Yellow
+    
 "@
                         if ($FullBackupPath) {
-                            $sqlScript += @"
--- Restore from full backup
-RESTORE DATABASE [$DatabaseName] FROM DISK = N'$FullBackupPath' WITH NORECOVERY, REPLACE
-GO
-
+                            $psScript += @"
+    # Restore full backup
+    Restore-DbaDatabase -SqlInstance `$targetConn -Path '$FullBackupPath' -DatabaseName '$DatabaseName' -ReplaceDbNameInFile -WithReplace -NoRecovery
 "@
                         }
                         if ($DifferentialBackupPath) {
-                            $sqlScript += @"
--- Restore from differential backup
-RESTORE DATABASE [$DatabaseName] FROM DISK = N'$DifferentialBackupPath' WITH NORECOVERY
-GO
-
+                            $psScript += @"
+    
+    # Restore differential backup
+    Restore-DbaDatabase -SqlInstance `$targetConn -Path '$DifferentialBackupPath' -DatabaseName '$DatabaseName' -Continue -NoRecovery
 "@
                         }
                         if ($LogBackupPaths) {
-                            foreach ($logBackup in $LogBackupPaths) {
-                                $sqlScript += @"
--- Restore from log backup
-RESTORE LOG [$DatabaseName] FROM DISK = N'$logBackup' WITH NORECOVERY
-GO
-
+                            foreach ($logPath in $LogBackupPaths) {
+                                $psScript += @"
+    
+    # Restore log backup: $logPath
+    Restore-DbaDatabase -SqlInstance `$targetConn -Path '$logPath' -DatabaseName '$DatabaseName' -Continue -NoRecovery
 "@
                             }
-                            $sqlScript += @"
--- Final recovery
-RESTORE DATABASE [$DatabaseName] WITH RECOVERY
-GO
-
+                            $psScript += @"
+    
+    # Final recovery
+    Restore-DbaDatabase -SqlInstance `$targetConn -DatabaseName '$DatabaseName' -Continue
 "@
                         }
+                        $psScript += @"
+    
+    Write-Host "Database $DatabaseName restored successfully from existing backups" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to restore database $DatabaseName : `$(`$_.Exception.Message)"
+    throw
+}
+
+"@
                     } else {
                         $backupFile = Join-Path $BackupPath "$DatabaseName`_Full_$(Get-Date -Format 'yyyyMMdd_HHmmss').bak"
-                        $sqlScript += @"
--- Create new backup and restore
-USE [master]
-GO
-
--- Create full backup
-BACKUP DATABASE [$DatabaseName] TO DISK = N'$backupFile' WITH INIT, COMPRESSION
-GO
-
--- Restore database
-RESTORE DATABASE [$DatabaseName] FROM DISK = N'$backupFile' WITH REPLACE
-GO
+                        $psScript += @"
+# Create new backup and restore using dbatools
+try {
+    Write-Host "Creating backup for database: $DatabaseName" -ForegroundColor Yellow
+    
+    # Create full backup
+    `$backupFile = "$backupFile"
+    Backup-DbaDatabase -SqlInstance `$sourceConn -Database '$DatabaseName' -Path `$backupFile -CompressBackup
+    
+    Write-Host "Restoring database from backup: `$backupFile" -ForegroundColor Yellow
+    
+    # Restore database
+    Restore-DbaDatabase -SqlInstance `$targetConn -Path `$backupFile -DatabaseName '$DatabaseName' -ReplaceDbNameInFile -WithReplace
+    
+    Write-Host "Database $DatabaseName migrated successfully via backup/restore" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to migrate database $DatabaseName via backup/restore: `$(`$_.Exception.Message)"
+    throw
+}
 
 "@
                     }
                 }
                 'DetachAttach' {
-                    $sqlScript += @"
--- Detach/Attach database migration
-USE [master]
-GO
-
--- Detach database from source (run on source instance)
-ALTER DATABASE [$DatabaseName] SET SINGLE_USER WITH ROLLBACK IMMEDIATE
-GO
-EXEC sp_detach_db '$DatabaseName'
-GO
-
--- Attach database to target (run on target instance after copying files)
-CREATE DATABASE [$DatabaseName] ON 
-    (FILENAME = N'[PATH_TO_MDF_FILE]'),
-    (FILENAME = N'[PATH_TO_LDF_FILE]')
-FOR ATTACH
-GO
+                    $psScript += @"
+# Detach/Attach migration using dbatools
+try {
+    Write-Host "Starting detach/attach migration for database: $DatabaseName" -ForegroundColor Yellow
+    
+    # Get database file paths
+    `$dbFiles = Get-DbaDbFile -SqlInstance `$sourceConn -Database '$DatabaseName'
+    
+    # Detach database from source
+    Dismount-DbaDatabase -SqlInstance `$sourceConn -Database '$DatabaseName' -Force
+    
+    # Note: Files must be copied to target server location manually
+    Write-Host "Manual step required: Copy database files to target server" -ForegroundColor Yellow
+    Write-Host "Files to copy:" -ForegroundColor Yellow
+    `$dbFiles | ForEach-Object { Write-Host "  `$(`$_.PhysicalName)" -ForegroundColor Cyan }
+    
+    # Attach database to target (uncomment after files are copied)
+    # Mount-DbaDatabase -SqlInstance `$targetConn -Database '$DatabaseName' -FileStructure `$dbFiles
+    
+    Write-Host "Database $DatabaseName detached from source. Complete file copy and uncomment attach command." -ForegroundColor Green
+} catch {
+    Write-Error "Failed to migrate database $DatabaseName via detach/attach: `$(`$_.Exception.Message)"
+    throw
+}
 
 "@
                 }
                 'Direct' {
-                    $sqlScript += @"
--- Direct database migration using dbatools Copy-DbaDatabase
--- This method uses PowerShell dbatools and cannot be represented as pure T-SQL
--- Use the PowerShell script execution instead for Direct method
-
--- Alternative: Manual backup/restore approach
-USE [master]
-GO
-
-DECLARE @BackupPath NVARCHAR(500) = N'[BACKUP_PATH]'
-DECLARE @BackupFile NVARCHAR(500) = @BackupPath + '$DatabaseName' + '_Migration_' + CONVERT(NVARCHAR(20), GETDATE(), 112) + '.bak'
-
--- Create backup
-BACKUP DATABASE [$DatabaseName] TO DISK = @BackupFile WITH INIT, COMPRESSION
-GO
-
--- Restore database (adjust file paths as needed)
-RESTORE DATABASE [$DatabaseName] FROM DISK = @BackupFile WITH REPLACE
-GO
+                    $psScript += @"
+# Direct migration using Copy-DbaDatabase
+try {
+    Write-Host "Attempting direct migration using Copy-DbaDatabase" -ForegroundColor Yellow
+    
+    Copy-DbaDatabase -Source `$sourceConn -Destination `$targetConn -Database '$DatabaseName' -BackupRestore -SharedPath '/tmp/SQLUpgrade' -Force
+    
+    Write-Host "Database $DatabaseName migrated successfully using Copy-DbaDatabase" -ForegroundColor Green
+} catch {
+    Write-Warning "Copy-DbaDatabase failed: `$(`$_.Exception.Message). Attempting table-by-table migration."
+    
+    # Fallback: Create empty database and copy data
+    New-DbaDatabase -SqlInstance `$targetConn -Name '$DatabaseName'
+    
+    # Copy tables and data
+    `$tables = Get-DbaDbTable -SqlInstance `$sourceConn -Database '$DatabaseName'
+    foreach (`$table in `$tables) {
+        Write-Host "Copying table: `$(`$table.Schema).`$(`$table.Name)" -ForegroundColor Cyan
+        Copy-DbaDbTableData -SqlInstance `$sourceConn -Database '$DatabaseName' -Table "`$(`$table.Schema).`$(`$table.Name)" -DestinationSqlInstance `$targetConn -DestinationDatabase '$DatabaseName'
+    }
+    
+    Write-Host "Database $DatabaseName migrated successfully using table-by-table method" -ForegroundColor Green
+}
 
 "@
                 }
             }
             
-            $sqlScript += @"
+            $psScript += @"
+# Post-migration tasks using dbatools
+try {
+    Write-Host "Running post-migration tasks for database: $DatabaseName" -ForegroundColor Yellow
+    
+    # Update database compatibility level to SQL Server 2022
+    Set-DbaDbCompatibility -SqlInstance `$targetConn -Database '$DatabaseName' -CompatibilityLevel 160
+    Write-Host "Updated compatibility level to SQL Server 2022 (160)" -ForegroundColor Cyan
+    
+    # Update statistics
+    Update-DbaStatistics -SqlInstance `$targetConn -Database '$DatabaseName'
+    Write-Host "Updated statistics for database: $DatabaseName" -ForegroundColor Cyan
+    
+    # Run DBCC CHECKDB
+    `$checkResult = Invoke-DbaDbccCheckdb -SqlInstance `$targetConn -Database '$DatabaseName'
+    if (`$checkResult.Status -eq "Success") {
+        Write-Host "DBCC CHECKDB completed successfully for database: $DatabaseName" -ForegroundColor Green
+    } else {
+        Write-Warning "DBCC CHECKDB found issues in database: $DatabaseName"
+    }
+    
+    Write-Host "Post-migration tasks completed for database: $DatabaseName" -ForegroundColor Green
+    
+} catch {
+    Write-Error "Error in post-migration tasks for database $DatabaseName : `$(`$_.Exception.Message)"
+}
 
--- Post-migration tasks
-USE [$DatabaseName]
-GO
-
--- Update database compatibility level to SQL Server 2022
-ALTER DATABASE [$DatabaseName] SET COMPATIBILITY_LEVEL = 160
-GO
-
--- Update statistics
-EXEC sp_updatestats
-GO
-
--- Rebuild indexes (sample - adjust for your specific needs)
-DECLARE @sql NVARCHAR(MAX) = ''
-SELECT @sql = @sql + 'ALTER INDEX ALL ON [' + SCHEMA_NAME(schema_id) + '].[' + name + '] REBUILD WITH (ONLINE = OFF)' + CHAR(13)
-FROM sys.tables WHERE type = 'U'
-EXEC sp_executesql @sql
-GO
-
--- Verify database integrity
-DBCC CHECKDB('$DatabaseName') WITH NO_INFOMSGS
-GO
-
-PRINT 'Database migration script completed for: $DatabaseName'
-GO
+Write-Host "Migration script completed for database: $DatabaseName" -ForegroundColor Green
 
 "@
             
             # Append to output file
-            Add-Content -Path $OutputFile -Value $sqlScript -Encoding UTF8
-            Write-UpgradeLog -Message "SQL script generated and appended to: $OutputFile" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+            Add-Content -Path $OutputFile -Value $psScript -Encoding UTF8
+            Write-UpgradeLog -Message "PowerShell script generated and appended to: $OutputFile" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             return
         }
         
-        # Execute migration based on selected method
-        switch ($MigrationMethod) {
-            'BackupRestore' {
-                if ($UseExistingBackups) {
-                    Restore-DatabaseFromExistingBackups -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -FullBackupPath $FullBackupPath -DifferentialBackupPath $DifferentialBackupPath -LogBackupPaths $LogBackupPaths -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-                } else {
-                    Restore-DatabaseFromNewBackups -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -BackupPath $BackupPath -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+        # Execute migration based on selected method (skip for OutputFile mode)
+        if (-not $OutputFile) {
+            switch ($MigrationMethod) {
+                'BackupRestore' {
+                    if ($UseExistingBackups) {
+                        Restore-DatabaseFromExistingBackups -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -FullBackupPath $FullBackupPath -DifferentialBackupPath $DifferentialBackupPath -LogBackupPaths $LogBackupPaths -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    } else {
+                        Restore-DatabaseFromNewBackups -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -BackupPath $BackupPath -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    }
                 }
-            }
-            'DetachAttach' {
-                Copy-DatabaseDetachAttach -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-            }
-            'Direct' {
-                # Primary method: Use Copy-DbaDatabase for complete database migration
-                try {
-                    Write-UpgradeLog -Message "Attempting complete database migration using Copy-DbaDatabase" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-                    Copy-DbaDatabase -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName -BackupRestore -SharedPath "/tmp/SQLUpgrade" -Force
-                    Write-UpgradeLog -Message "Successfully migrated database $DatabaseName using Copy-DbaDatabase" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
-                    return
-                } catch {
-                    Write-UpgradeLog -Message "Copy-DbaDatabase failed: $($_.Exception.Message). Falling back to table-by-table migration." -Level "Warning" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                'DetachAttach' {
+                    Copy-DatabaseDetachAttach -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
                 }
-                
-                # Fallback method: Table-by-table migration
-                Copy-DatabaseTableByTable -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                'Direct' {
+                    # Primary method: Use Copy-DbaDatabase for complete database migration
+                    try {
+                        Write-UpgradeLog -Message "Attempting complete database migration using Copy-DbaDatabase" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                        Copy-DbaDatabase -Source $SourceConnection -Destination $TargetConnection -Database $DatabaseName -BackupRestore -SharedPath "/tmp/SQLUpgrade" -Force
+                        Write-UpgradeLog -Message "Successfully migrated database $DatabaseName using Copy-DbaDatabase" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
+                        return
+                    } catch {
+                        Write-UpgradeLog -Message "Copy-DbaDatabase failed: $($_.Exception.Message). Falling back to table-by-table migration." -Level "Warning" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                    }
+                    
+                    # Fallback method: Table-by-table migration
+                    Copy-DatabaseTableByTable -SourceConnection $SourceConnection -TargetConnection $TargetConnection -DatabaseName $DatabaseName -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+                }
             }
         }
         
@@ -376,116 +417,117 @@ function Copy-ServerObjects {
     
     # Generate SQL script if OutputFile is specified
     if ($OutputFile) {
-        Write-UpgradeLog -Message "Generating SQL script for server object migration to: $OutputFile" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+        Write-UpgradeLog -Message "Generating PowerShell script for server object migration to: $OutputFile" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
         
-        $sqlScript = @"
--- SQL Server Server Objects Migration Script
--- Generated on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
--- Source Instance: $($SourceConnection.Name)
--- Target Instance: $($TargetConnection.Name)
+        $psScript = @"
+# PowerShell Server Objects Migration Script
+# Generated on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+# Source Instance: $($SourceConnection.Name)
+# Target Instance: $($TargetConnection.Name)
+
+# Import required module
+Import-Module dbatools -Force
+
+# Establish connections
+`$sourceConn = Connect-DbaInstance -SqlInstance '$($SourceConnection.Name)'
+`$targetConn = Connect-DbaInstance -SqlInstance '$($TargetConnection.Name)'
+
+Write-Host "Starting server objects migration" -ForegroundColor Green
 
 "@
         
         if ($ServerObjectOptions.IncludeLogins) {
-            $sqlScript += @"
--- Migrate SQL Server Logins
--- Note: This is a simplified example. Actual login migration requires handling passwords, SIDs, and permissions
--- Use dbatools Copy-DbaLogin for complete migration in PowerShell
-
--- Example login creation (adjust as needed)
--- CREATE LOGIN [ExampleLogin] WITH DEFAULT_DATABASE = [master]
--- GO
+            $psScript += @"
+# Migrate SQL Server Logins using dbatools
+try {
+    Write-Host "Migrating SQL Server Logins..." -ForegroundColor Yellow
+    Copy-DbaLogin -Source `$sourceConn -Destination `$targetConn -ExcludeSystemLogins
+    Write-Host "SQL Server Logins migrated successfully" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to migrate logins: `$(`$_.Exception.Message)"
+}
 
 "@
         }
         
         if ($ServerObjectOptions.IncludeJobs) {
-            $sqlScript += @"
--- Migrate SQL Server Agent Jobs
--- Note: Job migration requires recreating job steps, schedules, and notifications
--- Use dbatools Copy-DbaAgentJob for complete migration in PowerShell
-
--- Example job creation (adjust as needed)
--- USE [msdb]
--- GO
--- EXEC dbo.sp_add_job @job_name = N'Example Job'
--- GO
+            $psScript += @"
+# Migrate SQL Server Agent Jobs using dbatools
+try {
+    Write-Host "Migrating SQL Server Agent Jobs..." -ForegroundColor Yellow
+    Copy-DbaAgentJob -Source `$sourceConn -Destination `$targetConn
+    Write-Host "SQL Server Agent Jobs migrated successfully" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to migrate jobs: `$(`$_.Exception.Message)"
+}
 
 "@
         }
         
         if ($ServerObjectOptions.IncludeLinkedServers) {
-            $sqlScript += @"
--- Migrate Linked Servers
--- Note: Linked server migration requires handling security contexts and provider settings
--- Use dbatools Copy-DbaLinkedServer for complete migration in PowerShell
-
--- Example linked server creation (adjust as needed)
--- EXEC sp_addlinkedserver @server = N'LinkedServerName', @srvproduct = N'SQL Server'
--- GO
+            $psScript += @"
+# Migrate Linked Servers using dbatools
+try {
+    Write-Host "Migrating Linked Servers..." -ForegroundColor Yellow
+    Copy-DbaLinkedServer -Source `$sourceConn -Destination `$targetConn
+    Write-Host "Linked Servers migrated successfully" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to migrate linked servers: `$(`$_.Exception.Message)"
+}
 
 "@
         }
         
         if ($ServerObjectOptions.IncludeServerRoles) {
-            $sqlScript += @"
--- Migrate Custom Server Roles
--- Note: Server role migration requires handling role members and permissions
--- Use dbatools Copy-DbaServerRole for complete migration in PowerShell
-
--- Example server role creation (adjust as needed)
--- CREATE SERVER ROLE [CustomRole]
--- GO
+            $psScript += @"
+# Migrate Custom Server Roles using dbatools
+try {
+    Write-Host "Migrating Custom Server Roles..." -ForegroundColor Yellow
+    Copy-DbaServerRole -Source `$sourceConn -Destination `$targetConn
+    Write-Host "Custom Server Roles migrated successfully" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to migrate server roles: `$(`$_.Exception.Message)"
+}
 
 "@
         }
         
         if ($ServerObjectOptions.IncludeCredentials) {
-            $sqlScript += @"
--- Migrate Credentials
--- Note: Credential migration requires handling encrypted passwords
--- Use dbatools Copy-DbaCredential for complete migration in PowerShell
-
--- Example credential creation (adjust as needed)
--- CREATE CREDENTIAL [ExampleCredential] WITH IDENTITY = N'Domain\User', SECRET = N'[SECURE_SECRET_HERE]'
--- GO
+            $psScript += @"
+# Migrate Credentials using dbatools
+try {
+    Write-Host "Migrating Credentials..." -ForegroundColor Yellow
+    Copy-DbaCredential -Source `$sourceConn -Destination `$targetConn
+    Write-Host "Credentials migrated successfully" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to migrate credentials: `$(`$_.Exception.Message)"
+}
 
 "@
         }
         
         if ($ServerObjectOptions.IncludeServerConfiguration) {
-            $sqlScript += @"
--- Migrate Server Configuration Settings
--- Note: Configuration settings should be carefully reviewed before applying
--- Use dbatools Copy-DbaSpConfigure for complete migration in PowerShell
-
--- Example configuration setting (adjust as needed)
--- EXEC sp_configure 'show advanced options', 1
--- RECONFIGURE
--- GO
--- EXEC sp_configure 'max server memory (MB)', 8192
--- RECONFIGURE
--- GO
+            $psScript += @"
+# Migrate Server Configuration Settings using dbatools
+try {
+    Write-Host "Migrating Server Configuration Settings..." -ForegroundColor Yellow
+    Copy-DbaSpConfigure -Source `$sourceConn -Destination `$targetConn
+    Write-Host "Server Configuration Settings migrated successfully" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to migrate server configuration settings: `$(`$_.Exception.Message)"
+}
 
 "@
         }
         
-        $sqlScript += @"
-
--- Server Object Migration Notes:
--- 1. Review all generated scripts before execution
--- 2. Test in a non-production environment first
--- 3. Some objects may require manual adjustment for your environment
--- 4. Consider using PowerShell dbatools for more comprehensive migration
-
-PRINT 'Server object migration script completed'
-GO
+        $psScript += @"
+Write-Host "Server objects migration script completed" -ForegroundColor Green
 
 "@
         
         # Append to output file
-        Add-Content -Path $OutputFile -Value $sqlScript -Encoding UTF8
-        Write-UpgradeLog -Message "Server objects SQL script generated and appended to: $OutputFile" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+        Add-Content -Path $OutputFile -Value $psScript -Encoding UTF8
+        Write-UpgradeLog -Message "PowerShell server objects script generated and appended to: $OutputFile" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
         return
     }
     

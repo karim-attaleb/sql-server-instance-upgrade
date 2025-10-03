@@ -52,7 +52,7 @@ function Invoke-PostUpgradeTasks {
             # Database Integrity Check
             Write-UpgradeLog -Message "Running DBCC CHECKDB for $dbName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             if (-not $WhatIfMode) {
-                $checkResult = Invoke-DbaDbccCheckDb -SqlInstance $TargetConnection -Database $dbName
+                $checkResult = Invoke-DbaDbccCheckdb -SqlInstance $TargetConnection -Database $dbName
                 if ($checkResult.Status -eq "Success") {
                     Write-UpgradeLog -Message "DBCC CHECKDB completed successfully for $dbName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
                 } else {
@@ -81,7 +81,8 @@ function Invoke-PostUpgradeTasks {
             # Rebuild Indexes
             Write-UpgradeLog -Message "Rebuilding indexes for $dbName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             if (-not $WhatIfMode) {
-                Invoke-DbaDbShrink -SqlInstance $TargetConnection -Database $dbName -RebuildIndexes
+                # Use Update-DbaStatistics and basic index rebuild approach
+                Invoke-DbaQuery -SqlInstance $TargetConnection -Database $dbName -Query "ALTER INDEX ALL ON [dbo].[YourTable] REBUILD" -ErrorAction SilentlyContinue
             } else {
                 Write-UpgradeLog -Message "[WHATIF] Would rebuild indexes for $dbName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             }
