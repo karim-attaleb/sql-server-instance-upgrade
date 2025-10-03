@@ -5,8 +5,21 @@ Create a PowerPoint presentation for the SQL Server Upgrade Solution
 
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.dml.color import RGBColor
+
+def format_slide_content(text_frame, font_size=16, space_after=4):
+    """Helper function to format slide content consistently"""
+    for paragraph in text_frame.paragraphs:
+        paragraph.font.size = Pt(font_size)
+        paragraph.space_after = Pt(space_after)
+        paragraph.alignment = PP_ALIGN.LEFT
+    
+    text_frame.margin_left = Inches(0.1)
+    text_frame.margin_right = Inches(0.1)
+    text_frame.margin_top = Inches(0.1)
+    text_frame.margin_bottom = Inches(0.1)
+    text_frame.word_wrap = True
 
 def create_sql_upgrade_presentation():
     prs = Presentation()
@@ -17,7 +30,13 @@ def create_sql_upgrade_presentation():
     subtitle = slide.placeholders[1]
     
     title.text = "SQL Server 2022 Upgrade Solution"
-    subtitle.text = "Side-by-Side Instance Migration with Enhanced Backup/Restore Options\n\nPresented to: Database Administration Team\nSolution: Comprehensive PowerShell Migration Framework"
+    subtitle.text = "Side-by-Side Instance Migration\nwith Enhanced Backup/Restore Options\n\nDatabase Administration Team"
+    
+    title_paragraph = title.text_frame.paragraphs[0]
+    title_paragraph.font.size = Pt(36)
+    title_paragraph.font.bold = True
+    
+    format_slide_content(subtitle.text_frame, font_size=18, space_after=6)
     
     slide_layout = prs.slide_layouts[1]  # Title and content layout
     slide = prs.slides.add_slide(slide_layout)
@@ -29,11 +48,13 @@ def create_sql_upgrade_presentation():
 
 Key Benefits:
 • Zero Downtime - Side-by-side upgrade approach
-• Comprehensive Migration - Databases + Server Objects
+• Comprehensive Migration - Databases + Server Objects  
 • Multiple Migration Methods - Direct, Backup/Restore, Detach/Attach
 • Flexible Backup Options - New backups or existing backup chains
 • Production Ready - Tested, validated, and documented
 • Risk Mitigation - WhatIf mode and comprehensive logging"""
+    
+    format_slide_content(content.text_frame, font_size=16, space_after=4)
     
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
@@ -43,17 +64,18 @@ Key Benefits:
     content.text = """Modular PowerShell Solution
 
 6 Specialized Modules:
-1. SQLUpgrade.Logging - Comprehensive logging and event tracking
+1. SQLUpgrade.Logging - Comprehensive logging
 2. SQLUpgrade.Connection - Robust connection management
 3. SQLUpgrade.Database - Database discovery and validation
 4. SQLUpgrade.Encryption - TDE and encryption support
 5. SQLUpgrade.Migration - Core migration functionality
-6. SQLUpgrade.PostUpgrade - Post-migration tasks and validation
+6. SQLUpgrade.PostUpgrade - Post-migration tasks
 
 Main Orchestrator: Start-SQLServerUpgrade.ps1
 • Zero function definitions (calls modules only)
-• Follows dbatools design patterns
-• Enterprise-grade error handling"""
+• Follows dbatools design patterns"""
+    
+    format_slide_content(content.text_frame, font_size=14, space_after=3)
     
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
@@ -69,13 +91,15 @@ Main Orchestrator: Start-SQLServerUpgrade.ps1
 
 2. Backup/Restore Method
    • New Backups: Creates fresh full backup and restores
-   • Existing Backups: Uses existing full + differential + log backup chains
-   • Perfect for large databases or specific backup strategies
+   • Existing Backups: Uses existing backup chains
+   • Perfect for large databases
 
 3. Detach/Attach Method
    • File-level database migration
    • Fastest for very large databases
    • Requires careful file path management"""
+    
+    format_slide_content(content.text_frame, font_size=14, space_after=3)
     
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
@@ -91,13 +115,15 @@ Existing Backup Chain:
 -MigrationMethod BackupRestore -UseExistingBackups 
 -FullBackupPath "C:\\Backups\\DB_Full.bak"
 -DifferentialBackupPath "C:\\Backups\\DB_Diff.bak" 
--LogBackupPaths @("C:\\Backups\\DB_Log1.trn", "C:\\Backups\\DB_Log2.trn")
+-LogBackupPaths @("C:\\Backups\\Log1.trn", "Log2.trn")
 
 Benefits:
 • Leverage existing backup strategies
 • Point-in-time recovery capability
 • Minimal storage requirements
 • Integration with backup policies"""
+    
+    format_slide_content(content.text_frame, font_size=13, space_after=2)
     
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
@@ -122,21 +148,23 @@ Flexible Selection:
 • Individual switches: -IncludeLogins -IncludeJobs
 • All objects: -IncludeAllServerObjects"""
     
+    format_slide_content(content.text_frame, font_size=13, space_after=2)
+    
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
     content = slide.placeholders[1]
     
-    title.text = "SQL Script Generation"
+    title.text = "PowerShell Script Generation"
     content.text = """Offline Execution Capability
 
-Generate SQL Scripts for Later Execution:
--OutputFile "C:\\Scripts\\Migration_Script.sql"
+Generate PowerShell Scripts for Later Execution:
+-OutputFile "C:\\Scripts\\Migration_Script.ps1"
 
 Generated Scripts Include:
-• Database backup/restore commands
+• dbatools-based migration commands
 • Server object creation scripts
 • Post-migration tasks (compatibility, statistics, indexes)
-• DBCC CHECKDB validation
+• Database integrity validation
 • Comprehensive documentation and comments
 
 Use Cases:
@@ -144,6 +172,8 @@ Use Cases:
 • Scheduled maintenance windows
 • Audit trail requirements
 • Manual review and customization"""
+    
+    format_slide_content(content.text_frame, font_size=13, space_after=2)
     
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
@@ -168,6 +198,8 @@ Never Drops Objects:
 • Preserves existing target data
 • Additive approach only"""
     
+    format_slide_content(content.text_frame, font_size=14, space_after=3)
+    
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
     content = slide.placeholders[1]
@@ -179,20 +211,16 @@ Comprehensive Test Suite:
 • 61 Pester Tests - 100% pass rate
 • Unit Tests - Individual module validation
 • Integration Tests - End-to-end workflow testing
-• Container Testing - Real SQL Server migration validation
+• Container Testing - Real SQL Server validation
 
 Test Coverage:
 • Module imports and function exports
 • Parameter validation and error handling
 • Connection management and security
 • Migration methods and backup/restore
-• WhatIf functionality and logging
-
-Quality Metrics:
-• Zero function definitions in main script
-• PowerShell best practices compliance
-• Security validation (no hardcoded credentials)
-• Documentation completeness"""
+• WhatIf functionality and logging"""
+    
+    format_slide_content(content.text_frame, font_size=13, space_after=2)
     
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
@@ -208,17 +236,16 @@ Complete Instance Migration:
   -Databases "All" 
   -IncludeAllServerObjects
 
-Selective Database Migration with Existing Backups:
+Existing Backups Migration:
 .\\Start-SQLServerUpgrade.ps1 
-  -SourceInstance "SQL2019\\PROD" 
-  -TargetInstance "SQL2022\\PROD" 
-  -Databases @("CriticalDB", "ReportsDB") 
   -MigrationMethod BackupRestore 
   -UseExistingBackups 
-  -FullBackupPath "\\\\BackupServer\\CriticalDB_Full.bak"
+  -FullBackupPath "\\\\BackupServer\\DB_Full.bak"
 
-Generate SQL Script for Later Execution:
-.\\Start-SQLServerUpgrade.ps1 -OutputFile "Migration.sql" -WhatIf"""
+Generate PowerShell Script:
+.\\Start-SQLServerUpgrade.ps1 -OutputFile "Migration.ps1" -WhatIf"""
+    
+    format_slide_content(content.text_frame, font_size=12, space_after=2)
     
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
@@ -237,13 +264,13 @@ Phase 2: Pilot Testing (Week 2)
 • Select non-critical databases for pilot migration
 • Execute migrations in test environment
 • Validate results and performance
-• Refine procedures based on findings
 
 Phase 3: Production Migration (Week 3-4)
 • Schedule maintenance windows
 • Execute production migrations
-• Monitor and validate results
-• Document lessons learned"""
+• Monitor and validate results"""
+    
+    format_slide_content(content.text_frame, font_size=13, space_after=2)
     
     slide = prs.slides.add_slide(slide_layout)
     title = slide.shapes.title
@@ -256,20 +283,20 @@ Solution Benefits Recap:
 • Complete Instance Migration - Databases + Server Objects
 • Multiple Migration Methods - Flexible approach selection
 • Enhanced Backup/Restore - Existing backup chain support
-• SQL Script Generation - Offline execution capability
+• PowerShell Script Generation - Offline execution capability
 • Enterprise Safety Features - WhatIf, logging, validation
 • Production Tested - 100% test pass rate
 
 Repository Location:
 • GitHub: karim-attaleb/sql-server-instance-upgrade
 • Branch: sql-server-upgrade-solution
-• Documentation: Complete README and usage examples
 
 Questions?
 • Technical implementation details
 • Specific migration scenarios
-• Timeline and resource planning
-• Training and knowledge transfer"""
+• Timeline and resource planning"""
+    
+    format_slide_content(content.text_frame, font_size=13, space_after=2)
     
     prs.save('/home/ubuntu/sql-server-instance-upgrade/SQL-Server-Upgrade-Solution-Presentation.pptx')
     print("PowerPoint presentation created successfully!")

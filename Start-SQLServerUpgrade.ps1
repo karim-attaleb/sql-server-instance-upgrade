@@ -170,20 +170,26 @@ try {
     if ($OutputFile) {
         Write-UpgradeLog -Message "OutputFile specified - generating SQL scripts for later execution" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
         
-        # Initialize output file with header
+        # Initialize output file with PowerShell header
         $scriptHeader = @"
--- SQL Server Instance Upgrade Script
--- Generated on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
--- Source Instance: $SourceInstance
--- Target Instance: $TargetInstance
--- Migration Method: $MigrationMethod
--- 
--- This script contains the SQL commands to migrate databases and server objects
--- Review and execute this script on your target SQL Server instance
---
+# PowerShell SQL Server Instance Upgrade Script
+# Generated on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+# Source Instance: $SourceInstance
+# Target Instance: $TargetInstance
+# Migration Method: $MigrationMethod
+# 
+# This script contains PowerShell commands using dbatools to migrate databases and server objects
+# Review and execute this script in PowerShell on a machine with access to both SQL Server instances
+#
 
-USE [master]
-GO
+# Import required module
+Import-Module dbatools -Force
+
+# Establish connections
+`$sourceConn = Connect-DbaInstance -SqlInstance '$SourceInstance'
+`$targetConn = Connect-DbaInstance -SqlInstance '$TargetInstance'
+
+Write-Host "Starting SQL Server instance upgrade migration" -ForegroundColor Green
 
 "@
         Set-Content -Path $OutputFile -Value $scriptHeader -Encoding UTF8
@@ -265,34 +271,36 @@ GO
     # Run post-upgrade tasks
     if ($processedDatabases.Count -gt 0 -and -not $WhatIf) {
         if ($OutputFile) {
-            # Generate post-upgrade tasks script
+            # Generate post-upgrade tasks PowerShell script
             $postUpgradeScript = @"
 
--- Post-Upgrade Tasks
--- Run these commands after the database migration is complete
+# Post-Upgrade Tasks using dbatools
+# Run these PowerShell commands after the database migration is complete
 
 "@
             foreach ($dbName in $processedDatabases) {
                 $postUpgradeScript += @"
--- Database: $dbName
-USE [$dbName]
-GO
+# Database: $dbName
+Write-Host "Running post-upgrade tasks for database: $dbName" -ForegroundColor Yellow
 
--- Check database integrity
-DBCC CHECKDB('$dbName') WITH NO_INFOMSGS
-GO
+# Check database integrity
+`$checkResult = Invoke-DbaDbccCheckdb -SqlInstance `$targetConn -Database '$dbName'
+if (`$checkResult.Status -eq "Success") {
+    Write-Host "DBCC CHECKDB completed successfully for $dbName" -ForegroundColor Green
+} else {
+    Write-Warning "DBCC CHECKDB found issues in $dbName"
+}
 
--- Update compatibility level to SQL Server 2022 (160)
-ALTER DATABASE [$dbName] SET COMPATIBILITY_LEVEL = 160
-GO
+# Update compatibility level to SQL Server 2022 (160)
+Set-DbaDbCompatibility -SqlInstance `$targetConn -Database '$dbName' -CompatibilityLevel 160
+Write-Host "Updated compatibility level for $dbName to SQL Server 2022" -ForegroundColor Cyan
 
--- Update statistics
-EXEC sp_updatestats
-GO
+# Update statistics
+Update-DbaStatistics -SqlInstance `$targetConn -Database '$dbName'
+Write-Host "Updated statistics for $dbName" -ForegroundColor Cyan
 
--- Rebuild indexes (sample - customize as needed)
--- ALTER INDEX ALL ON [YourTable] REBUILD WITH (ONLINE = ON)
-GO
+# Note: Index rebuilding should be customized based on your specific tables and requirements
+Write-Host "Post-upgrade tasks completed for $dbName" -ForegroundColor Green
 
 "@
             }
