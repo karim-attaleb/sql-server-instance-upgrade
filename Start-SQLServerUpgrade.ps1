@@ -299,7 +299,11 @@ GO
             Add-Content -Path $OutputFile -Value $postUpgradeScript -Encoding UTF8
             Write-UpgradeLog -Message "Post-upgrade tasks added to output file: $OutputFile" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
         } else {
-            Invoke-PostUpgradeTasks -TargetConnection $targetConnection -DatabaseNames $processedDatabases -WhatIfMode $WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+            if ($WhatIf) {
+                Invoke-PostUpgradeTasks -TargetConnection $targetConnection -DatabaseNames $processedDatabases -WhatIfMode -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+            } else {
+                Invoke-PostUpgradeTasks -TargetConnection $targetConnection -DatabaseNames $processedDatabases -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+            }
         }
     }
     
