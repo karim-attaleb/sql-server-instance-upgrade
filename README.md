@@ -12,14 +12,15 @@ A comprehensive PowerShell solution for upgrading SQL Server instances to SQL Se
 4. **Complete Database Migration**: Migrates entire databases as complete units
 5. **Collation Checking**: Automatically verifies collation compatibility
 6. **Encryption & TDE Support**: Handles encrypted objects and TDE databases
-7. **Flexible Execution**: Direct application or output file generation
-8. **WhatIf Support**: Preview changes without execution
-9. **Safe Operations**: Never drops anything, only adds objects
-10. **Enhanced Database Filtering**: Excludes system and utility databases by default with optional inclusion
-11. **Flexible Server Object Exclusion**: Comprehensive Exclude parameter for fine-grained control
-12. **Database Selection**: Choose specific databases or all user databases
-13. **Idempotent**: Safe to run multiple times
-14. **Start-DbaMigration.ps1 Compatibility**: Wrapper script following dbatools patterns
+7. **Enhanced Script Generation**: OutputFile mode now queries actual source instances for real database names, following dbatools Export-DbaInstance patterns
+8. **Flexible Execution**: Direct application or output file generation
+9. **WhatIf Support**: Preview changes without execution
+10. **Safe Operations**: Never drops anything, only adds objects
+11. **Enhanced Database Filtering**: Excludes system and utility databases by default with optional inclusion
+12. **Flexible Server Object Exclusion**: Comprehensive Exclude parameter for fine-grained control
+13. **Database Selection**: Choose specific databases or all user databases
+14. **Idempotent**: Safe to run multiple times
+15. **Start-DbaMigration.ps1 Compatibility**: Wrapper script following dbatools patterns
 
 ## Modular Architecture
 
@@ -99,9 +100,30 @@ The solution is organized into the following modules:
 .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeEncryption
 ```
 
-### Generate Script File for Later Execution
+### Enhanced Script Generation
+
+The `-OutputFile` parameter now follows dbatools best practices by:
+- Querying the actual source instance for real database names
+- Generating PowerShell scripts with actual database references
+- Providing fallback behavior when the source instance is unavailable
+- Maintaining all existing functionality while eliminating mock data
+
+**Important**: When using `-Databases "All"` with `-OutputFile`, the source instance must be accessible during script generation to enumerate actual databases.
+
 ```powershell
-.\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -OutputFile "C:\Scripts\UpgradeScript.sql"
+# Generate migration script with real database names
+.\Start-SQLServerUpgrade.ps1 `
+    -SourceInstance "SQL2019\PROD" `
+    -TargetInstance "SQL2022\PROD" `
+    -Databases "All" `
+    -OutputFile "C:\Scripts\Migration-Script.ps1"
+
+# Generate script with specific databases when source is unavailable
+.\Start-SQLServerUpgrade.ps1 `
+    -SourceInstance "SQL2019\PROD" `
+    -TargetInstance "SQL2022\PROD" `
+    -Databases @("CustomerDB", "OrdersDB") `
+    -OutputFile "C:\Scripts\Migration-Script.ps1"
 ```
 
 ### Using Individual Modules

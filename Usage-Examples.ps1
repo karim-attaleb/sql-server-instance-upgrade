@@ -183,6 +183,29 @@ Write-Host @"
     -IncludeSupportDbs
 "@
 
+Write-Host "`nExample 13: Generate PowerShell script with real database names" -ForegroundColor Green
+Write-Host "# Script generation now queries the source instance for actual database names"
+Write-Host "# This ensures the generated script contains real databases, not mock placeholders"
+Write-Host "# The source instance must be accessible during script generation"
+Write-Host @"
+.\Start-SQLServerUpgrade.ps1 `
+    -SourceInstance "SQL2019\PROD" `
+    -TargetInstance "SQL2022\PROD" `
+    -Databases "All" `
+    -OutputFile "C:\Scripts\Migration-`$(Get-Date -Format 'yyyyMMdd').ps1"
+"@
+
+Write-Host "`nExample 14: Generate script with specific databases when source is unavailable" -ForegroundColor Green
+Write-Host "# When the source instance is not accessible, specify explicit database names"
+Write-Host "# This allows script generation even when the source server is offline"
+Write-Host @"
+.\Start-SQLServerUpgrade.ps1 `
+    -SourceInstance "SQL2019\PROD" `
+    -TargetInstance "SQL2022\PROD" `
+    -Databases @("CustomerDB", "OrdersDB", "InventoryDB") `
+    -OutputFile "C:\Scripts\Migration-`$(Get-Date -Format 'yyyyMMdd').ps1"
+"@
+
 Write-Host "`n=== Prerequisites Check Script ===" -ForegroundColor Yellow
 Write-Host "# Run this before executing the upgrade script to ensure your environment is ready"
 Write-Host "# Verifies dbatools installation, connectivity, disk space, and SQL Server versions"

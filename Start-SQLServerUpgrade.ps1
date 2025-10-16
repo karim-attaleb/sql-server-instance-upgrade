@@ -188,9 +188,8 @@ Import-Module (Join-Path $ModulePath "SQLUpgrade.PostUpgrade.psm1") -Force
 try {
     $logInfo = Initialize-UpgradeLogging -LogPath $LogPath
     
-    # For OutputFile generation, we can work with mock connections or skip connection validation
     if ($OutputFile) {
-        Write-UpgradeLog -Message "OutputFile specified - generating SQL scripts for later execution" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+        Write-UpgradeLog -Message "OutputFile specified - generating PowerShell scripts for later execution" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
         
         # Initialize output file with PowerShell header
         $scriptHeader = @"
@@ -217,8 +216,7 @@ Write-Host "Starting SQL Server instance upgrade migration" -ForegroundColor Gre
         Set-Content -Path $OutputFile -Value $scriptHeader -Encoding UTF8
         Write-UpgradeLog -Message "Initialized output file: $OutputFile" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
         
-        # Create mock connection objects for script generation
-        $sourceConnection = @{ ComputerName = $SourceInstance; InstanceName = $SourceInstance }
+        # Create mock connection objects for script generation (used by Copy-ServerObjects and Copy-CompleteDatabase)
         $targetConnection = @{ ComputerName = $TargetInstance; InstanceName = $TargetInstance }
         
         # Skip collation compatibility check for script generation
@@ -233,19 +231,24 @@ Write-Host "Starting SQL Server instance upgrade migration" -ForegroundColor Gre
     
     # Get databases to process
     if ($OutputFile) {
-        # For script generation, create mock database objects
-        if ($Databases -eq "All") {
-            $databasesToProcess = @(
-                @{ Name = "UserDatabase1" },
-                @{ Name = "UserDatabase2" },
-                @{ Name = "UserDatabase3" }
-            )
-            Write-UpgradeLog -Message "[SCRIPT MODE] Using sample database names - modify the generated script with your actual database names" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-        } else {
-            if ($Databases -is [string]) {
-                $databasesToProcess = @(@{ Name = $Databases })
+        # For script generation, establish connection to query real databases
+        Write-UpgradeLog -Message "[SCRIPT MODE] Connecting to source instance to query actual databases" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+        try {
+            $sourceConnection = Test-InstanceConnectivity -Instance $SourceInstance -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+            $databasesToProcess = Get-UserDatabases -Connection $sourceConnection -DatabaseFilter $Databases -IncludeSupportDbs:$IncludeSupportDbs -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+            Write-UpgradeLog -Message "[SCRIPT MODE] Found $($databasesToProcess.Count) databases to include in generated script" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+        } catch {
+            Write-UpgradeLog -Message "[SCRIPT MODE] Warning: Could not connect to source instance for database enumeration. Using provided database names." -Level "Warning" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+            # Fallback to provided database names if connection fails
+            if ($Databases -eq "All") {
+                Write-UpgradeLog -Message "[SCRIPT MODE] Cannot enumerate databases without connection. Please specify explicit database names when source is not accessible." -Level "Error" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+                throw "Cannot generate script for 'All' databases without source instance connection"
             } else {
-                $databasesToProcess = $Databases | ForEach-Object { @{ Name = $_ } }
+                if ($Databases -is [string]) {
+                    $databasesToProcess = @(@{ Name = $Databases })
+                } else {
+                    $databasesToProcess = $Databases | ForEach-Object { @{ Name = $_ } }
+                }
             }
         }
     } else {
