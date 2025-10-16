@@ -15,8 +15,11 @@ A comprehensive PowerShell solution for upgrading SQL Server instances to SQL Se
 7. **Flexible Execution**: Direct application or output file generation
 8. **WhatIf Support**: Preview changes without execution
 9. **Safe Operations**: Never drops anything, only adds objects
-10. **Database Selection**: Choose specific databases or all user databases
-11. **Idempotent**: Safe to run multiple times
+10. **Enhanced Database Filtering**: Excludes system and utility databases by default with optional inclusion
+11. **Flexible Server Object Exclusion**: Comprehensive Exclude parameter for fine-grained control
+12. **Database Selection**: Choose specific databases or all user databases
+13. **Idempotent**: Safe to run multiple times
+14. **Start-DbaMigration.ps1 Compatibility**: Wrapper script following dbatools patterns
 
 ## Modular Architecture
 
@@ -46,6 +49,32 @@ The solution is organized into the following modules:
 - Administrative privileges for Windows Event Log writing
 
 ## Usage Examples
+
+### Enhanced Database Filtering and Server Object Exclusion
+
+**User Database Migration (Default):**
+```powershell
+# Excludes system databases (master, model, msdb, tempdb) and utility databases (ReportServer, SSISDB, distribution, etc.)
+.\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\PROD" -TargetInstance "SQL2022\PROD" -Databases "All" -WhatIf
+```
+
+**Include Utility Databases:**
+```powershell
+# Include ReportServer, SSISDB, distribution databases when needed
+.\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\PROD" -TargetInstance "SQL2022\PROD" -Databases "All" -IncludeSupportDbs
+```
+
+**Server Object Exclusion:**
+```powershell
+# Exclude specific server objects from migration
+.\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\PROD" -TargetInstance "SQL2022\PROD" -Databases "All" -Exclude 'Logins','AgentServer','LinkedServers'
+```
+
+**Start-DbaMigration.ps1 Wrapper:**
+```powershell
+# Use the dbatools-compatible wrapper script
+.\Start-DbaMigration.ps1 -Source "SQL2019\PROD" -Destination "SQL2022\PROD" -BackupRestore -SharedPath "\\server\backups" -WhatIf
+```
 
 ### Basic Usage with WhatIf
 ```powershell
@@ -87,6 +116,8 @@ $connection = Test-InstanceConnectivity -Instance "SQL2019\INSTANCE1" -LogFile $
 | `OutputFile` | String | No | Path to output file for later execution |
 | `WhatIf` | Switch | No | Show what would be done without making changes |
 | `LogPath` | String | No | Path for log files (default: C:\Logs\SQLUpgrade) |
+| `IncludeSupportDbs` | Switch | No | Include utility databases (ReportServer, SSISDB, distribution, etc.) |
+| `Exclude` | String[] | No | Server objects to exclude from migration |
 
 ## Database Migration Approach
 
@@ -120,7 +151,7 @@ Automatically performs:
 
 - **No Destructive Operations**: Never drops or deletes existing objects
 - **Idempotent Design**: Safe to run multiple times
-- **System Database Protection**: Excludes system databases from operations
+- **Enhanced Database Protection**: Excludes system and utility databases from operations by default
 - **Connectivity Validation**: Tests connections before processing
 - **Collation Verification**: Warns about collation mismatches
 
@@ -150,6 +181,7 @@ Automatically performs:
 ```
 SQL-Server-Upgrade-Solution/
 ├── Start-SQLServerUpgrade.ps1          # Main orchestrator script
+├── Start-DbaMigration.ps1              # dbatools-compatible wrapper script
 ├── Modules/                             # PowerShell modules
 │   ├── SQLUpgrade.Logging.psm1         # Logging functionality
 │   ├── SQLUpgrade.Connection.psm1      # Connection management
@@ -157,6 +189,8 @@ SQL-Server-Upgrade-Solution/
 │   ├── SQLUpgrade.Encryption.psm1      # Encryption handling
 │   ├── SQLUpgrade.Migration.psm1       # Database migration
 │   └── SQLUpgrade.PostUpgrade.psm1     # Post-upgrade tasks
+├── Tests/                               # Pester test suite
+│   └── SQLUpgrade.Tests.ps1            # Comprehensive tests
 ├── README.md                            # This documentation
 ├── README-Modules.md                    # Detailed module documentation
 └── Usage-Examples.ps1                   # Usage examples
