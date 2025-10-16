@@ -544,6 +544,32 @@ Describe "Module Architecture Validation" {
         }
     }
     
+    Context "Enhanced Database Filtering" {
+        It "Should exclude utility databases by default" {
+            $command = Get-Command Get-UserDatabases
+            $command.Parameters.Keys | Should -Contain "IncludeSupportDbs"
+        }
+        
+        It "Should include utility databases when IncludeSupportDbs is specified" {
+            $command = Get-Command Get-UserDatabases
+            $command.Parameters["IncludeSupportDbs"].ParameterType | Should -Be ([switch])
+        }
+        
+        It "Should support comprehensive Exclude parameter in main script" {
+            $script:MainScriptContent | Should -Match "\[string\[\]\]\`$Exclude"
+            $script:MainScriptContent | Should -Match "IncludeSupportDbs"
+        }
+        
+        It "Should have Start-DbaMigration.ps1 wrapper script" {
+            $wrapperScript = Join-Path $PSScriptRoot "..\Start-DbaMigration.ps1"
+            $wrapperScript | Should -Exist
+            $wrapperContent = Get-Content $wrapperScript -Raw
+            $wrapperContent | Should -Match "Start-SQLServerUpgrade\.ps1"
+            $wrapperContent | Should -Match "IncludeSupportDbs"
+            $wrapperContent | Should -Match "Exclude"
+        }
+    }
+    
     Context "Function Distribution" {
         It "Should have functions properly distributed across modules" {
             $ModulePath = Join-Path $PSScriptRoot "..\Modules"
