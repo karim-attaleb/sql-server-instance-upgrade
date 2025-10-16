@@ -150,18 +150,18 @@ param(
     [string]$DifferentialBackupPath,
     [string[]]$LogBackupPaths,
     
-    # Server Object Migration Switches
-    [switch]$IncludeLogins,
-    [switch]$IncludeJobs,
-    [switch]$IncludeLinkedServers,
-    [switch]$IncludeTriggers,
-    [switch]$IncludeServerRoles,
-    [switch]$IncludeCredentials,
-    [switch]$IncludeProxyAccounts,
-    [switch]$IncludeAlerts,
-    [switch]$IncludeOperators,
-    [switch]$IncludeBackupDevices,
-    [switch]$IncludeServerConfiguration,
+    # Server Object Migration Switches (enabled by default for complete instance migration)
+    [switch]$IncludeLogins = $true,
+    [switch]$IncludeJobs = $true,
+    [switch]$IncludeLinkedServers = $true,
+    [switch]$IncludeTriggers = $true,
+    [switch]$IncludeServerRoles = $true,
+    [switch]$IncludeCredentials = $true,
+    [switch]$IncludeProxyAccounts = $true,
+    [switch]$IncludeAlerts = $true,
+    [switch]$IncludeOperators = $true,
+    [switch]$IncludeBackupDevices = $true,
+    [switch]$IncludeServerConfiguration = $true,
     [switch]$IncludeAllServerObjects,
     
     # Comprehensive exclusion parameter (alternative to individual switches)
