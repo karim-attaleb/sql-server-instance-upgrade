@@ -50,29 +50,42 @@ The solution is organized into the following modules:
 
 ## Usage Examples
 
-### Enhanced Database Filtering and Server Object Exclusion
+### Complete Instance Migration (Default Behavior)
 
-**User Database Migration (Default):**
+**Complete Instance Migration - Everything except system/utility databases:**
 ```powershell
-# Excludes system databases (master, model, msdb, tempdb) and utility databases (ReportServer, SSISDB, distribution, etc.)
+# By default, migrates EVERYTHING for a complete instance upgrade:
+# ✅ All user databases (excludes system: master, model, msdb, tempdb)
+# ✅ All server objects: logins, jobs, linked servers, credentials, alerts, operators, etc.
+# ❌ Excludes utility databases (ReportServer, SSISDB, distribution) for safety
+# This is the recommended approach for complete SQL Server instance migrations
 .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\PROD" -TargetInstance "SQL2022\PROD" -Databases "All" -WhatIf
 ```
 
-**Include Utility Databases:**
+**Include Utility Databases - For servers with SSRS/SSIS/Replication:**
 ```powershell
-# Include ReportServer, SSISDB, distribution databases when needed
+# Include ReportServer, SSISDB, distribution databases when migrating servers with:
+# - SQL Server Reporting Services (SSRS) - includes ReportServer databases
+# - SQL Server Integration Services (SSIS) - includes SSISDB database  
+# - SQL Server Replication - includes distribution database
+# - Data Quality Services (DQS) - includes DQS databases
 .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\PROD" -TargetInstance "SQL2022\PROD" -Databases "All" -IncludeSupportDbs
 ```
 
-**Server Object Exclusion:**
+**Server Object Exclusion - Fine-grained control:**
 ```powershell
-# Exclude specific server objects from migration
+# Exclude specific server objects when you need granular control:
+# - Exclude 'Logins' when you want to review/manage security separately
+# - Exclude 'AgentServer' when you want to prevent jobs from running immediately
+# - Exclude 'LinkedServers' when connection strings need updating for new environment
 .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\PROD" -TargetInstance "SQL2022\PROD" -Databases "All" -Exclude 'Logins','AgentServer','LinkedServers'
 ```
 
-**Start-DbaMigration.ps1 Wrapper:**
+**Start-DbaMigration.ps1 Wrapper - dbatools-compatible interface:**
 ```powershell
-# Use the dbatools-compatible wrapper script
+# Use the familiar dbatools Start-DbaMigration interface for complete instance migration
+# This provides the same comprehensive migration as the main script but with dbatools-style parameters
+# Migrates all user databases + all server objects by default (excludes system/utility databases)
 .\Start-DbaMigration.ps1 -Source "SQL2019\PROD" -Destination "SQL2022\PROD" -BackupRestore -SharedPath "\\server\backups" -WhatIf
 ```
 

@@ -120,7 +120,13 @@ if ($BackupRestore -and $SharedPath) {
 }
 
 # Execute the migration using the modular solution
+# By default, this migrates everything except system and utility databases:
+# - All user databases (excludes master, model, msdb, tempdb)
+# - All server objects (logins, jobs, linked servers, credentials, etc.)
+# - Excludes utility databases (ReportServer, SSISDB, distribution) unless -IncludeSupportDbs is specified
 try {
+    Write-Host "Starting comprehensive instance migration..." -ForegroundColor Yellow
+    Write-Host "This will migrate all user databases and server objects by default" -ForegroundColor Yellow
     & (Join-Path $PSScriptRoot "Start-SQLServerUpgrade.ps1") @params
     Write-Host "SQL Server instance migration completed successfully" -ForegroundColor Green
 } catch {
