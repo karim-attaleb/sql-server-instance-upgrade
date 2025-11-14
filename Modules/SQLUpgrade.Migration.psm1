@@ -809,17 +809,17 @@ function Restore-DatabaseFromNewBackups {
             Write-UpgradeLog -Message "Created backup directory: $BackupPath" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
         }
         
-        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $fullBackupFile = Join-Path $BackupPath "$DatabaseName`_Full_$timestamp.bak"
+        # Create full backup - Pass directory path to Backup-DbaDatabase
+        Write-UpgradeLog -Message "Creating full backup in directory: $BackupPath" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+        $backupResult = Backup-DbaDatabase -SqlInstance $SourceConnection -Database $DatabaseName -Path $BackupPath -Type Full
         
-        # Create full backup
-        Write-UpgradeLog -Message "Creating full backup: $fullBackupFile" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-        Backup-DbaDatabase -SqlInstance $SourceConnection -Database $DatabaseName -Path $fullBackupFile -Type Full
-        Write-UpgradeLog -Message "Successfully created full backup" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+        # Get the actual backup file path from the backup result
+        $backupFilePath = $backupResult.Path
+        Write-UpgradeLog -Message "Successfully created full backup: $backupFilePath" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
         
-        # Restore database
-        Write-UpgradeLog -Message "Restoring database from backup" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
-        Restore-DbaDatabase -SqlInstance $TargetConnection -Path $fullBackupFile -DatabaseName $DatabaseName
+        # Restore database using the actual backup file path
+        Write-UpgradeLog -Message "Restoring database from backup: $backupFilePath" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
+        Restore-DbaDatabase -SqlInstance $TargetConnection -Path $backupFilePath -DatabaseName $DatabaseName
         Write-UpgradeLog -Message "Successfully restored database $DatabaseName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
         
     } catch {
