@@ -326,7 +326,7 @@ try {
 }
 
 # Update compatibility level to SQL Server 2022 (160)
-Set-DbaDbCompatibility -SqlInstance `$targetConn -Database '$dbName' -CompatibilityLevel 160
+Set-DbaDbCompatibility -SqlInstance `$targetConn -Database '$dbName' -Compatibility 160
 Write-Host "Updated compatibility level for $dbName to SQL Server 2022" -ForegroundColor Cyan
 
 # Update statistics
