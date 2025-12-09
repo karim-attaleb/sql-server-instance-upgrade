@@ -65,7 +65,7 @@ function Invoke-PostUpgradeTasks {
             # Update Database Compatibility Level
             Write-UpgradeLog -Message "Updating compatibility level for $dbName to SQL Server 2022" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             if (-not $WhatIfMode) {
-                Set-DbaDbCompatibility -SqlInstance $TargetConnection -Database $dbName -CompatibilityLevel 160 # SQL Server 2022
+                Set-DbaDbCompatibility -SqlInstance $TargetConnection -Database $dbName -Compatibility 160 # SQL Server 2022
             } else {
                 Write-UpgradeLog -Message "[WHATIF] Would update compatibility level for $dbName to 160" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             }

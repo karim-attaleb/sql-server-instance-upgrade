@@ -301,7 +301,7 @@ try {
     Write-Host "Running post-migration tasks for database: $DatabaseName" -ForegroundColor Yellow
     
     # Update database compatibility level to SQL Server 2022
-    Set-DbaDbCompatibility -SqlInstance `$targetConn -Database '$DatabaseName' -CompatibilityLevel 160
+    Set-DbaDbCompatibility -SqlInstance `$targetConn -Database '$DatabaseName' -Compatibility 160
     Write-Host "Updated compatibility level to SQL Server 2022 (160)" -ForegroundColor Cyan
     
     # Update statistics
