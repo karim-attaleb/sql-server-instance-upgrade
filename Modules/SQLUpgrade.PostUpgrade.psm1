@@ -52,11 +52,11 @@ function Invoke-PostUpgradeTasks {
             # Database Integrity Check
             Write-UpgradeLog -Message "Running DBCC CHECKDB for $dbName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             if (-not $WhatIfMode) {
-                $checkResult = Invoke-DbaDbccCheckdb -SqlInstance $TargetConnection -Database $dbName
-                if ($checkResult.Status -eq "Success") {
+                try {
+                    Invoke-DbaQuery -SqlInstance $TargetConnection -Database $dbName -Query "DBCC CHECKDB([$dbName]) WITH NO_INFOMSGS" -EnableException
                     Write-UpgradeLog -Message "DBCC CHECKDB completed successfully for $dbName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
-                } else {
-                    Write-UpgradeLog -Message "DBCC CHECKDB found issues in $dbName" -Level "Warning" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
+                } catch {
+                    Write-UpgradeLog -Message "DBCC CHECKDB found issues in $dbName : $($_.Exception.Message)" -Level "Warning" -LogFile $LogFile -ErrorLogFile $ErrorLogFile -WriteToEventLog
                 }
             } else {
                 Write-UpgradeLog -Message "[WHATIF] Would run DBCC CHECKDB for $dbName" -LogFile $LogFile -ErrorLogFile $ErrorLogFile

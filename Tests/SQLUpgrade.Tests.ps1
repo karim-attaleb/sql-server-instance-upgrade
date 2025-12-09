@@ -417,11 +417,11 @@ try {
     Write-Host "Updated statistics for database: TestDB" -ForegroundColor Cyan
     
     # Run DBCC CHECKDB
-    `$checkResult = Invoke-DbaDbccCheckdb -SqlInstance `$targetConn -Database 'TestDB'
-    if (`$checkResult.Status -eq "Success") {
+    try {
+        Invoke-DbaQuery -SqlInstance `$targetConn -Database 'TestDB' -Query "DBCC CHECKDB([TestDB]) WITH NO_INFOMSGS" -EnableException
         Write-Host "DBCC CHECKDB completed successfully for database: TestDB" -ForegroundColor Green
-    } else {
-        Write-Warning "DBCC CHECKDB found issues in database: TestDB"
+    } catch {
+        Write-Warning "DBCC CHECKDB found issues in database: TestDB - `$(`$_.Exception.Message)"
     }
     
     Write-Host "Post-migration tasks completed for database: TestDB" -ForegroundColor Green
@@ -444,14 +444,14 @@ Write-Host "Migration script completed for database: TestDB" -ForegroundColor Gr
         $content | Should -Match "Restore-DbaDatabase"
         $content | Should -Match "Set-DbaDbCompatibility"
         $content | Should -Match "Update-DbaStatistics"
-        $content | Should -Match "Invoke-DbaDbccCheckdb"
+        $content | Should -Match "Invoke-DbaQuery"
         
-        # Verify it does NOT contain T-SQL commands
+        # Verify it does NOT contain raw T-SQL commands (DBCC CHECKDB is now executed via Invoke-DbaQuery)
         $content | Should -Not -Match "BACKUP DATABASE \["
         $content | Should -Not -Match "RESTORE DATABASE \["
         $content | Should -Not -Match "ALTER DATABASE.*SET COMPATIBILITY_LEVEL"
         $content | Should -Not -Match "EXEC sp_updatestats"
-        $content | Should -Not -Match "DBCC CHECKDB\("
+        # Note: DBCC CHECKDB is now executed via Invoke-DbaQuery cmdlet, so it appears as a query string
         $content | Should -Not -Match "USE \[master\]"
         $content | Should -Not -Match "GO"
         
