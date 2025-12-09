@@ -309,11 +309,11 @@ try {
     Write-Host "Updated statistics for database: $DatabaseName" -ForegroundColor Cyan
     
     # Run DBCC CHECKDB
-    `$checkResult = Invoke-DbaDbccCheckdb -SqlInstance `$targetConn -Database '$DatabaseName'
-    if (`$checkResult.Status -eq "Success") {
+    try {
+        Invoke-DbaQuery -SqlInstance `$targetConn -Database '$DatabaseName' -Query "DBCC CHECKDB([$DatabaseName]) WITH NO_INFOMSGS" -EnableException
         Write-Host "DBCC CHECKDB completed successfully for database: $DatabaseName" -ForegroundColor Green
-    } else {
-        Write-Warning "DBCC CHECKDB found issues in database: $DatabaseName"
+    } catch {
+        Write-Warning "DBCC CHECKDB found issues in database: $DatabaseName - `$(`$_.Exception.Message)"
     }
     
     Write-Host "Post-migration tasks completed for database: $DatabaseName" -ForegroundColor Green
@@ -582,7 +582,7 @@ Write-Host "Server objects migration script completed" -ForegroundColor Green
             Write-UpgradeLog -Message "Migrating server triggers" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
             if (-not $WhatIfMode) {
                 try {
-                    Copy-DbaServerTrigger -Source $SourceConnection -Destination $TargetConnection
+                    Copy-DbaInstanceTrigger -Source $SourceConnection -Destination $TargetConnection
                     Write-UpgradeLog -Message "Successfully migrated server triggers" -LogFile $LogFile -ErrorLogFile $ErrorLogFile
                 } catch {
                     Write-UpgradeLog -Message "Error migrating server triggers: $($_.Exception.Message)" -Level "Warning" -LogFile $LogFile -ErrorLogFile $ErrorLogFile

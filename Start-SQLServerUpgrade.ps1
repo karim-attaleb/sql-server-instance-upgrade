@@ -318,11 +318,11 @@ Write-Host "Starting SQL Server instance upgrade migration" -ForegroundColor Gre
 Write-Host "Running post-upgrade tasks for database: $dbName" -ForegroundColor Yellow
 
 # Check database integrity
-`$checkResult = Invoke-DbaDbccCheckdb -SqlInstance `$targetConn -Database '$dbName'
-if (`$checkResult.Status -eq "Success") {
+try {
+    Invoke-DbaQuery -SqlInstance `$targetConn -Database '$dbName' -Query "DBCC CHECKDB([$dbName]) WITH NO_INFOMSGS" -EnableException
     Write-Host "DBCC CHECKDB completed successfully for $dbName" -ForegroundColor Green
-} else {
-    Write-Warning "DBCC CHECKDB found issues in $dbName"
+} catch {
+    Write-Warning "DBCC CHECKDB found issues in $dbName - `$(`$_.Exception.Message)"
 }
 
 # Update compatibility level to SQL Server 2022 (160)
