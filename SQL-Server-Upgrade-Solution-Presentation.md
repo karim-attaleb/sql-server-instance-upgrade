@@ -13,7 +13,7 @@ Solution: Side-by-Side Instance Upgrade
 
 ---
 
-## Slide 2: Executive Summary
+## Slide 2: Summary
 ### Key Benefits
 - ✅ **100% dbatools** - No T-SQL dependencies
 - ✅ **Modular Design** - 6 specialized modules like dbatools
@@ -21,7 +21,7 @@ Solution: Side-by-Side Instance Upgrade
 - ✅ **Production Ready** - Comprehensive logging, error handling, WhatIf mode
 - ✅ **Safe Operations** - Never drops anything, idempotent design
 
-### Business Value
+### Value
 - Reduces upgrade risk through proven dbatools methods
 - Accelerates migration timeline with automated processes
 - Ensures data integrity with complete database approach
