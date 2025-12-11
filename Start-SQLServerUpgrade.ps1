@@ -21,9 +21,6 @@
 .PARAMETER IncludeEncryption
     Include encrypted objects and TDE databases
     
-.PARAMETER OutputFile
-    Path to output file for later execution instead of direct application
-    
 .PARAMETER WhatIf
     Show what would be done without making changes
     
@@ -137,7 +134,6 @@ param(
     $Databases,
     
     [switch]$IncludeEncryption,
-    [string]$OutputFile,
     [string]$LogPath = "/tmp/SQLUpgrade",
     
     # Migration Method Options
@@ -188,69 +184,14 @@ Import-Module (Join-Path $ModulePath "SQLUpgrade.PostUpgrade.psm1") -Force
 try {
     $logInfo = Initialize-UpgradeLogging -LogPath $LogPath
     
-    # For OutputFile generation, we can work with mock connections or skip connection validation
-    if ($OutputFile) {
-        Write-UpgradeLog -Message "OutputFile specified - generating SQL scripts for later execution" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-        
-        # Initialize output file with PowerShell header
-        $scriptHeader = @"
-# PowerShell SQL Server Instance Upgrade Script
-# Generated on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-# Source Instance: $SourceInstance
-# Target Instance: $TargetInstance
-# Migration Method: $MigrationMethod
-# 
-# This script contains PowerShell commands using dbatools to migrate databases and server objects
-# Review and execute this script in PowerShell on a machine with access to both SQL Server instances
-#
-
-# Import required module
-Import-Module dbatools -Force
-
-# Establish connections
-`$sourceConn = Connect-DbaInstance -SqlInstance '$SourceInstance'
-`$targetConn = Connect-DbaInstance -SqlInstance '$TargetInstance'
-
-Write-Host "Starting SQL Server instance upgrade migration" -ForegroundColor Green
-
-"@
-        Set-Content -Path $OutputFile -Value $scriptHeader -Encoding UTF8
-        Write-UpgradeLog -Message "Initialized output file: $OutputFile" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-        
-        # Create mock connection objects for script generation
-        $sourceConnection = @{ ComputerName = $SourceInstance; InstanceName = $SourceInstance }
-        $targetConnection = @{ ComputerName = $TargetInstance; InstanceName = $TargetInstance }
-        
-        # Skip collation compatibility check for script generation
-        Write-UpgradeLog -Message "[SCRIPT MODE] Skipping collation compatibility check - will be included in generated script" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-    } else {
-        # Normal execution mode - establish real connections
-        $sourceConnection = Test-InstanceConnectivity -Instance $SourceInstance -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-        $targetConnection = Test-InstanceConnectivity -Instance $TargetInstance -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-        
-        Test-CollationCompatibility -SourceConnection $sourceConnection -TargetConnection $targetConnection -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-    }
+    # Establish connections to source and target instances
+    $sourceConnection = Test-InstanceConnectivity -Instance $SourceInstance -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+    $targetConnection = Test-InstanceConnectivity -Instance $TargetInstance -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+    
+    Test-CollationCompatibility -SourceConnection $sourceConnection -TargetConnection $targetConnection -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     
     # Get databases to process
-    if ($OutputFile) {
-        # For script generation, create mock database objects
-        if ($Databases -eq "All") {
-            $databasesToProcess = @(
-                @{ Name = "UserDatabase1" },
-                @{ Name = "UserDatabase2" },
-                @{ Name = "UserDatabase3" }
-            )
-            Write-UpgradeLog -Message "[SCRIPT MODE] Using sample database names - modify the generated script with your actual database names" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-        } else {
-            if ($Databases -is [string]) {
-                $databasesToProcess = @(@{ Name = $Databases })
-            } else {
-                $databasesToProcess = $Databases | ForEach-Object { @{ Name = $_ } }
-            }
-        }
-    } else {
-        $databasesToProcess = Get-UserDatabases -Connection $sourceConnection -DatabaseFilter $Databases -IncludeSupportDbs:$IncludeSupportDbs -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-    }
+    $databasesToProcess = Get-UserDatabases -Connection $sourceConnection -DatabaseFilter $Databases -IncludeSupportDbs:$IncludeSupportDbs -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     
     # Migrate server objects first (if requested and not excluded)
     $shouldMigrateServerObjects = ($IncludeAllServerObjects -or $IncludeLogins -or $IncludeJobs -or $IncludeLinkedServers -or $IncludeTriggers -or $IncludeServerRoles -or $IncludeCredentials -or $IncludeProxyAccounts -or $IncludeAlerts -or $IncludeOperators -or $IncludeBackupDevices -or $IncludeServerConfiguration) -and ($Exclude -notcontains 'Logins' -and $Exclude -notcontains 'AgentServer' -and $Exclude -notcontains 'LinkedServers' -and $Exclude -notcontains 'Credentials')
@@ -272,11 +213,7 @@ Write-Host "Starting SQL Server instance upgrade migration" -ForegroundColor Gre
         
         Write-UpgradeLog -Message "Server object migration options: $(($serverObjectOptions.GetEnumerator() | Where-Object { $_.Value } | ForEach-Object { $_.Key }) -join ', ')" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
         
-        if ($OutputFile) {
-            Copy-ServerObjects -SourceConnection $sourceConnection -TargetConnection $targetConnection -ServerObjectOptions $serverObjectOptions -OutputFile $OutputFile -WhatIfMode:$WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-        } else {
-            Copy-ServerObjects -SourceConnection $sourceConnection -TargetConnection $targetConnection -ServerObjectOptions $serverObjectOptions -WhatIfMode:$WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-        }
+        Copy-ServerObjects -SourceConnection $sourceConnection -TargetConnection $targetConnection -ServerObjectOptions $serverObjectOptions -WhatIfMode:$WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     } else {
         Write-UpgradeLog -Message "Server object migration skipped (excluded or not requested)" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     }
@@ -288,11 +225,7 @@ Write-Host "Starting SQL Server instance upgrade migration" -ForegroundColor Gre
         
         foreach ($database in $databasesToProcess) {
             try {
-                if ($OutputFile) {
-                    Copy-CompleteDatabase -SourceConnection $sourceConnection -TargetConnection $targetConnection -DatabaseName $database.Name -IncludeEncryption:$IncludeEncryption -MigrationMethod $MigrationMethod -BackupPath $BackupPath -UseExistingBackups:$UseExistingBackups -FullBackupPath $FullBackupPath -DifferentialBackupPath $DifferentialBackupPath -LogBackupPaths $LogBackupPaths -OutputFile $OutputFile -WhatIfMode:$WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-                } else {
-                    Copy-CompleteDatabase -SourceConnection $sourceConnection -TargetConnection $targetConnection -DatabaseName $database.Name -IncludeEncryption:$IncludeEncryption -MigrationMethod $MigrationMethod -BackupPath $BackupPath -UseExistingBackups:$UseExistingBackups -FullBackupPath $FullBackupPath -DifferentialBackupPath $DifferentialBackupPath -LogBackupPaths $LogBackupPaths -WhatIfMode:$WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-                }
+                Copy-CompleteDatabase -SourceConnection $sourceConnection -TargetConnection $targetConnection -DatabaseName $database.Name -IncludeEncryption:$IncludeEncryption -MigrationMethod $MigrationMethod -BackupPath $BackupPath -UseExistingBackups:$UseExistingBackups -FullBackupPath $FullBackupPath -DifferentialBackupPath $DifferentialBackupPath -LogBackupPaths $LogBackupPaths -WhatIfMode:$WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
                 $processedDatabases += $database.Name
             } catch {
                 Write-UpgradeLog -Message "Failed to process database $($database.Name): $($_.Exception.Message)" -Level "Error" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile -WriteToEventLog
@@ -304,56 +237,7 @@ Write-Host "Starting SQL Server instance upgrade migration" -ForegroundColor Gre
     
     # Run post-upgrade tasks
     if ($processedDatabases.Count -gt 0 -and -not $WhatIf) {
-        if ($OutputFile) {
-            # Generate post-upgrade tasks PowerShell script
-            $postUpgradeScript = @"
-
-# Post-Upgrade Tasks using dbatools
-# Run these PowerShell commands after the database migration is complete
-
-"@
-            foreach ($dbName in $processedDatabases) {
-                $postUpgradeScript += @"
-# Database: $dbName
-Write-Host "Running post-upgrade tasks for database: $dbName" -ForegroundColor Yellow
-
-# Check database integrity
-try {
-    Invoke-DbaQuery -SqlInstance `$targetConn -Database '$dbName' -Query "DBCC CHECKDB([$dbName]) WITH NO_INFOMSGS" -EnableException
-    Write-Host "DBCC CHECKDB completed successfully for $dbName" -ForegroundColor Green
-} catch {
-    Write-Warning "DBCC CHECKDB found issues in $dbName - `$(`$_.Exception.Message)"
-}
-
-# Update compatibility level to SQL Server 2022 (160)
-Set-DbaDbCompatibility -SqlInstance `$targetConn -Database '$dbName' -Compatibility 160
-Write-Host "Updated compatibility level for $dbName to SQL Server 2022" -ForegroundColor Cyan
-
-# Update statistics
-Update-DbaStatistics -SqlInstance `$targetConn -Database '$dbName'
-Write-Host "Updated statistics for $dbName" -ForegroundColor Cyan
-
-# Note: Index rebuilding should be customized based on your specific tables and requirements
-Write-Host "Post-upgrade tasks completed for $dbName" -ForegroundColor Green
-
-"@
-            }
-            Add-Content -Path $OutputFile -Value $postUpgradeScript -Encoding UTF8
-            Write-UpgradeLog -Message "Post-upgrade tasks added to output file: $OutputFile" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-        } else {
-            if ($WhatIf) {
-                Invoke-PostUpgradeTasks -TargetConnection $targetConnection -DatabaseNames $processedDatabases -WhatIfMode -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-            } else {
-                Invoke-PostUpgradeTasks -TargetConnection $targetConnection -DatabaseNames $processedDatabases -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
-            }
-        }
-    }
-    
-    # Final message for OutputFile mode
-    if ($OutputFile) {
-        Write-UpgradeLog -Message "SQL script generation completed successfully. Review and execute: $OutputFile" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile -WriteToEventLog
-        Write-Host "SQL script generated successfully: $OutputFile" -ForegroundColor Green
-        Write-Host "Review the generated script and execute it on your target SQL Server instance." -ForegroundColor Yellow
+        Invoke-PostUpgradeTasks -TargetConnection $targetConnection -DatabaseNames $processedDatabases -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     }
     
 } catch {

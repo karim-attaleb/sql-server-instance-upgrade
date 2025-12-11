@@ -46,21 +46,7 @@ Write-Host @"
     -WhatIf
 "@
 
-Write-Host "`nExample 4: Generate PowerShell script file for later execution - Audit and control deployment" -ForegroundColor Green
-Write-Host "# Creates a PowerShell script using dbatools cmdlets instead of executing immediately"
-Write-Host "# Perfect for production environments where changes need approval before execution"
-Write-Host "# Generated script includes all migration steps: databases + server objects + post-upgrade tasks"
-Write-Host "# Review the generated script before executing it in your target environment"
-Write-Host @"
-.\Start-SQLServerUpgrade.ps1 `
-    -SourceInstance "SQLSERVER2019\PROD" `
-    -TargetInstance "SQLSERVER2022\PROD" `
-    -Databases "All" `
-    -OutputFile "C:\Scripts\ProductionUpgrade.ps1" `
-    -IncludeEncryption
-"@
-
-Write-Host "`nExample 5: Upgrade with encryption support - Handle TDE and encrypted databases" -ForegroundColor Green
+Write-Host "`nExample 4: Upgrade with encryption support - Handle TDE and encrypted databases" -ForegroundColor Green
 Write-Host "# Essential when migrating databases with Transparent Data Encryption (TDE) or other encryption"
 Write-Host "# Automatically handles encryption keys, certificates, and encrypted database migration"
 Write-Host "# Includes comprehensive logging for security audit requirements"
