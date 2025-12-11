@@ -308,19 +308,21 @@ Describe "Main Script Integration Tests" {
             $script:MainScriptContent | Should -Match "\`$LogPath"
         }
         
-        It "Should have server object migration parameters" {
-            $script:MainScriptContent | Should -Match "\`$IncludeLogins"
-            $script:MainScriptContent | Should -Match "\`$IncludeJobs"
-            $script:MainScriptContent | Should -Match "\`$IncludeLinkedServers"
-            $script:MainScriptContent | Should -Match "\`$IncludeTriggers"
-            $script:MainScriptContent | Should -Match "\`$IncludeServerRoles"
-            $script:MainScriptContent | Should -Match "\`$IncludeCredentials"
-            $script:MainScriptContent | Should -Match "\`$IncludeProxyAccounts"
-            $script:MainScriptContent | Should -Match "\`$IncludeAlerts"
-            $script:MainScriptContent | Should -Match "\`$IncludeOperators"
-            $script:MainScriptContent | Should -Match "\`$IncludeBackupDevices"
-            $script:MainScriptContent | Should -Match "\`$IncludeServerConfiguration"
-            $script:MainScriptContent | Should -Match "\`$IncludeAllServerObjects"
+        It "Should have Exclude parameter for dbatools-style component exclusion" {
+            # dbatools-style: ALL components migrated by default, use -Exclude to skip specific ones
+            $script:MainScriptContent | Should -Match "\`$Exclude"
+            $script:MainScriptContent | Should -Match "ValidateSet.*'Databases'.*'Logins'.*'AgentServer'"
+        }
+        
+        It "Should have optional Databases parameter" {
+            # Databases parameter should NOT be mandatory (dbatools-style)
+            $script:MainScriptContent | Should -Not -Match "\[Parameter\(Mandatory = \`$true\)\]\s*\[ValidateScript.*\`$Databases"
+        }
+        
+        It "Should build serverObjectOptions from Exclude parameter" {
+            # Server object options should be derived purely from -Exclude
+            $script:MainScriptContent | Should -Match "IncludeLogins\s*=\s*\(\`$Exclude -notcontains 'Logins'\)"
+            $script:MainScriptContent | Should -Match "IncludeJobs\s*=\s*\(\`$Exclude -notcontains 'AgentServer'\)"
         }
         
         It "Should call module functions only" {
