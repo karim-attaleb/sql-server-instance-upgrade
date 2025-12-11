@@ -49,10 +49,9 @@ This solution provides a comprehensive PowerShell solution for upgrading SQL Ser
 - **Encrypted objects**: Detects and handles encrypted database objects
 - **Migration logic**: Placeholder for TDE migration procedures
 
-### ✅ 5. Choice to apply upgrade directly or create output file
-- **IMPLEMENTED**: `$OutputFile` parameter
+### ✅ 5. Direct execution
+- **IMPLEMENTED**: Changes are applied immediately
 - **Direct execution**: Default behavior applies changes immediately
-- **Script generation**: Optional output file creation for later execution
 
 ### ✅ 6. -WhatIf switch
 - **IMPLEMENTED**: `[CmdletBinding(SupportsShouldProcess)]` with `$WhatIf` parameter
@@ -137,9 +136,8 @@ This solution provides a comprehensive PowerShell solution for upgrading SQL Ser
 1. **Preview Mode**: WhatIf functionality for safe testing
 2. **Production Upgrade**: Complete database migration with all features
 3. **Selective Migration**: Choose specific databases and object types
-4. **Script Generation**: Create scripts for scheduled execution
-5. **Encrypted Databases**: Handle TDE and encrypted objects
-6. **Development/Test**: Simplified migrations for non-production environments
+4. **Encrypted Databases**: Handle TDE and encrypted objects
+5. **Development/Test**: Simplified migrations for non-production environments
 
 ## Technical Implementation Details
 

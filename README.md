@@ -12,7 +12,7 @@ A comprehensive PowerShell solution for upgrading SQL Server instances to SQL Se
 4. **Complete Database Migration**: Migrates entire databases as complete units
 5. **Collation Checking**: Automatically verifies collation compatibility
 6. **Encryption & TDE Support**: Handles encrypted objects and TDE databases
-7. **Flexible Execution**: Direct application or output file generation
+7. **Direct Execution**: Immediate application of changes
 8. **WhatIf Support**: Preview changes without execution
 9. **Safe Operations**: Never drops anything, only adds objects
 10. **Enhanced Database Filtering**: Excludes system and utility databases by default with optional inclusion
@@ -99,11 +99,6 @@ The solution is organized into the following modules:
 .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeEncryption
 ```
 
-### Generate Script File for Later Execution
-```powershell
-.\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -OutputFile "C:\Scripts\UpgradeScript.sql"
-```
-
 ### Using Individual Modules
 ```powershell
 # Import specific modules for custom workflows
@@ -126,7 +121,6 @@ $connection = Test-InstanceConnectivity -Instance "SQL2019\INSTANCE1" -LogFile $
 | `TargetInstance` | String | Yes | Target SQL Server 2022 instance name |
 | `Databases` | String/Array | Yes | Database names to upgrade or "All" for all user databases |
 | `IncludeEncryption` | Switch | No | Include encrypted objects and TDE databases |
-| `OutputFile` | String | No | Path to output file for later execution |
 | `WhatIf` | Switch | No | Show what would be done without making changes |
 | `LogPath` | String | No | Path for log files (default: C:\Logs\SQLUpgrade) |
 | `IncludeSupportDbs` | Switch | No | Include utility databases (ReportServer, SSISDB, distribution, etc.) |
