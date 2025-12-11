@@ -112,7 +112,7 @@ param(
     $Databases,
     
     [switch]$IncludeEncryption,
-    [string]$LogPath = "/tmp/SQLUpgrade",
+    [string]$LogPath = "c:\temp\SQLUpgrade",
     
     # Migration Method Options
     [ValidateSet('Direct', 'BackupRestore', 'DetachAttach')]
