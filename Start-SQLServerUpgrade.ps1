@@ -16,7 +16,9 @@
     Target SQL Server 2022 instance name
     
 .PARAMETER Databases
-    Array of database names to upgrade. Use 'All' for all user databases
+    Array of database names to upgrade. Use 'All' for all user databases.
+    If omitted and 'Databases' is not in -Exclude, defaults to 'All' (migrate all user databases).
+    If omitted and 'Databases' is in -Exclude, no databases are migrated (server objects only).
     
 .PARAMETER IncludeEncryption
     Include encrypted objects and TDE databases
@@ -45,42 +47,6 @@
 .PARAMETER LogBackupPaths
     Array of paths to existing log backup files
 
-.PARAMETER IncludeLogins
-    Migrate SQL Server logins (excluding system logins)
-
-.PARAMETER IncludeJobs
-    Migrate SQL Server Agent jobs
-
-.PARAMETER IncludeLinkedServers
-    Migrate linked servers
-
-.PARAMETER IncludeTriggers
-    Migrate server-level triggers
-
-.PARAMETER IncludeServerRoles
-    Migrate custom server roles
-
-.PARAMETER IncludeCredentials
-    Migrate credentials
-
-.PARAMETER IncludeProxyAccounts
-    Migrate SQL Server Agent proxy accounts
-
-.PARAMETER IncludeAlerts
-    Migrate SQL Server Agent alerts
-
-.PARAMETER IncludeOperators
-    Migrate SQL Server Agent operators
-
-.PARAMETER IncludeBackupDevices
-    Migrate backup devices
-
-.PARAMETER IncludeServerConfiguration
-    Migrate server configuration settings
-
-.PARAMETER IncludeAllServerObjects
-    Migrate all server-level objects (equivalent to enabling all individual switches)
-
 .PARAMETER Exclude
     Server objects to exclude from migration. Valid values:
     'Databases', 'Logins', 'AgentServer', 'Credentials', 'LinkedServers', 'SpConfigure', 
@@ -94,25 +60,36 @@
     Use this when migrating servers with SQL Server Reporting Services, Integration Services, or replication configured.
     
 .EXAMPLE
-    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases @("Database1", "Database2") -WhatIf
+    # Full migration (all databases and all server objects - default behavior)
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1"
     
 .EXAMPLE
-    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeEncryption
+    # Server objects only (no database migration)
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Exclude 'Databases'
 
 .EXAMPLE
-    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeAllServerObjects
+    # Specific databases only
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases @("Database1", "Database2")
 
 .EXAMPLE
-    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeLogins -IncludeJobs -IncludeLinkedServers
+    # Full migration with encryption support
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -IncludeEncryption
 
 .EXAMPLE
-    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -MigrationMethod BackupRestore -BackupPath "C:\Backups"
+    # Full migration excluding logins and Agent jobs
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Exclude 'Logins','AgentServer'
 
 .EXAMPLE
-    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases @("MyDB") -MigrationMethod BackupRestore -UseExistingBackups -FullBackupPath "C:\Backups\MyDB_Full.bak" -DifferentialBackupPath "C:\Backups\MyDB_Diff.bak" -LogBackupPaths @("C:\Backups\MyDB_Log1.trn", "C:\Backups\MyDB_Log2.trn")
+    # Backup/Restore migration method
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -MigrationMethod BackupRestore -BackupPath "C:\Backups"
 
 .EXAMPLE
-    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases "All" -IncludeSupportDbs -Exclude 'Logins','AgentServer'
+    # Restore from existing backups
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -Databases @("MyDB") -MigrationMethod BackupRestore -UseExistingBackups -FullBackupPath "C:\Backups\MyDB_Full.bak"
+
+.EXAMPLE
+    # Include utility databases (SSRS, SSIS, replication)
+    .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\INSTANCE1" -TargetInstance "SQL2022\INSTANCE1" -IncludeSupportDbs
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -123,9 +100,10 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$TargetInstance,
     
-    [Parameter(Mandatory = $true)]
+    # Optional: Filter which databases to migrate. Defaults to 'All' if not specified.
+    # Use -Exclude 'Databases' to skip database migration entirely.
     [ValidateScript({
-        if ($_ -eq "All" -or ($_ -is [array] -and $_.Count -gt 0) -or ($_ -is [string] -and $_ -ne "")) {
+        if ($null -eq $_ -or $_ -eq "All" -or ($_ -is [array] -and $_.Count -gt 0) -or ($_ -is [string] -and $_ -ne "")) {
             $true
         } else {
             throw "Databases must be 'All' or an array of database names"
@@ -146,21 +124,8 @@ param(
     [string]$DifferentialBackupPath,
     [string[]]$LogBackupPaths,
     
-    # Server Object Migration Switches (enabled by default for complete instance migration)
-    [switch]$IncludeLogins = $true,
-    [switch]$IncludeJobs = $true,
-    [switch]$IncludeLinkedServers = $true,
-    [switch]$IncludeTriggers = $true,
-    [switch]$IncludeServerRoles = $true,
-    [switch]$IncludeCredentials = $true,
-    [switch]$IncludeProxyAccounts = $true,
-    [switch]$IncludeAlerts = $true,
-    [switch]$IncludeOperators = $true,
-    [switch]$IncludeBackupDevices = $true,
-    [switch]$IncludeServerConfiguration = $true,
-    [switch]$IncludeAllServerObjects,
-    
-    # Comprehensive exclusion parameter (alternative to individual switches)
+    # Exclusion parameter - use to skip specific components (dbatools-style)
+    # By default, ALL components are migrated. Use -Exclude to skip specific ones.
     [ValidateSet('Databases', 'Logins', 'AgentServer', 'Credentials', 'LinkedServers', 'SpConfigure', 'CentralManagementServer', 'DatabaseMail', 'SysDbUserObjects', 'SystemTriggers', 'BackupDevices', 'Audits', 'Endpoints', 'ExtendedEvents', 'PolicyManagement', 'ResourceGovernor', 'ServerAuditSpecifications', 'CustomErrors', 'DataCollector', 'StartupProcedures')]
     [string[]]$Exclude = @(),
     
@@ -180,6 +145,11 @@ Import-Module (Join-Path $ModulePath "SQLUpgrade.Encryption.psm1") -Force
 Import-Module (Join-Path $ModulePath "SQLUpgrade.Migration.psm1") -Force
 Import-Module (Join-Path $ModulePath "SQLUpgrade.PostUpgrade.psm1") -Force
 
+# Validate conflicting parameters
+if ($PSBoundParameters.ContainsKey('Databases') -and $Exclude -contains 'Databases') {
+    throw "You cannot specify -Databases and also exclude 'Databases' via -Exclude. Remove one of these parameters."
+}
+
 # Execute upgrade process using module functions only
 try {
     $logInfo = Initialize-UpgradeLogging -LogPath $LogPath
@@ -190,37 +160,46 @@ try {
     
     Test-CollationCompatibility -SourceConnection $sourceConnection -TargetConnection $targetConnection -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     
-    # Get databases to process
-    $databasesToProcess = Get-UserDatabases -Connection $sourceConnection -DatabaseFilter $Databases -IncludeSupportDbs:$IncludeSupportDbs -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+    # Build server object options based purely on -Exclude parameter (dbatools-style)
+    # By default, ALL server objects are migrated. Use -Exclude to skip specific ones.
+    $serverObjectOptions = @{
+        IncludeLogins             = ($Exclude -notcontains 'Logins')
+        IncludeJobs               = ($Exclude -notcontains 'AgentServer')
+        IncludeLinkedServers      = ($Exclude -notcontains 'LinkedServers')
+        IncludeTriggers           = ($Exclude -notcontains 'SystemTriggers')
+        IncludeServerRoles        = ($Exclude -notcontains 'Logins')
+        IncludeCredentials        = ($Exclude -notcontains 'Credentials')
+        IncludeProxyAccounts      = ($Exclude -notcontains 'AgentServer')
+        IncludeAlerts             = ($Exclude -notcontains 'AgentServer')
+        IncludeOperators          = ($Exclude -notcontains 'AgentServer')
+        IncludeBackupDevices      = ($Exclude -notcontains 'BackupDevices')
+        IncludeServerConfiguration = ($Exclude -notcontains 'SpConfigure')
+    }
     
-    # Migrate server objects first (if requested and not excluded)
-    $shouldMigrateServerObjects = ($IncludeAllServerObjects -or $IncludeLogins -or $IncludeJobs -or $IncludeLinkedServers -or $IncludeTriggers -or $IncludeServerRoles -or $IncludeCredentials -or $IncludeProxyAccounts -or $IncludeAlerts -or $IncludeOperators -or $IncludeBackupDevices -or $IncludeServerConfiguration) -and ($Exclude -notcontains 'Logins' -and $Exclude -notcontains 'AgentServer' -and $Exclude -notcontains 'LinkedServers' -and $Exclude -notcontains 'Credentials')
+    # Migrate server objects if any are enabled
+    $shouldMigrateServerObjects = $serverObjectOptions.Values -contains $true
     
     if ($shouldMigrateServerObjects) {
-        $serverObjectOptions = @{
-            IncludeLogins = ($IncludeLogins -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'Logins')
-            IncludeJobs = ($IncludeJobs -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'AgentServer')
-            IncludeLinkedServers = ($IncludeLinkedServers -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'LinkedServers')
-            IncludeTriggers = ($IncludeTriggers -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'SystemTriggers')
-            IncludeServerRoles = ($IncludeServerRoles -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'Logins')
-            IncludeCredentials = ($IncludeCredentials -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'Credentials')
-            IncludeProxyAccounts = ($IncludeProxyAccounts -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'AgentServer')
-            IncludeAlerts = ($IncludeAlerts -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'AgentServer')
-            IncludeOperators = ($IncludeOperators -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'AgentServer')
-            IncludeBackupDevices = ($IncludeBackupDevices -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'BackupDevices')
-            IncludeServerConfiguration = ($IncludeServerConfiguration -or $IncludeAllServerObjects) -and ($Exclude -notcontains 'SpConfigure')
-        }
-        
         Write-UpgradeLog -Message "Server object migration options: $(($serverObjectOptions.GetEnumerator() | Where-Object { $_.Value } | ForEach-Object { $_.Key }) -join ', ')" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
         
         Copy-ServerObjects -SourceConnection $sourceConnection -TargetConnection $targetConnection -ServerObjectOptions $serverObjectOptions -WhatIfMode:$WhatIf -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     } else {
-        Write-UpgradeLog -Message "Server object migration skipped (excluded or not requested)" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+        Write-UpgradeLog -Message "Server object migration skipped (all server objects excluded)" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
     }
     
     # Migrate databases (if not excluded)
     $processedDatabases = @()
     if ($Exclude -notcontains 'Databases') {
+        # Determine effective database filter: use provided value or default to 'All'
+        $effectiveDatabaseFilter = if ($PSBoundParameters.ContainsKey('Databases')) {
+            $Databases
+        } else {
+            'All'
+        }
+        
+        # Get databases to process (only when databases are NOT excluded)
+        $databasesToProcess = Get-UserDatabases -Connection $sourceConnection -DatabaseFilter $effectiveDatabaseFilter -IncludeSupportDbs:$IncludeSupportDbs -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
+        
         Write-UpgradeLog -Message "Starting database migration for $($databasesToProcess.Count) databases" -LogFile $logInfo.LogFile -ErrorLogFile $logInfo.ErrorLogFile
         
         foreach ($database in $databasesToProcess) {

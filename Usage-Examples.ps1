@@ -129,21 +129,31 @@ Write-UpgradeLog -Message "Test message" -Level "Information" -LogFile `$logInfo
 Get-Command -Module SQLUpgrade.Logging
 "@
 
-Write-Host "`nExample 10: Complete instance migration (default behavior) - Comprehensive upgrade" -ForegroundColor Green
+Write-Host "`nExample 10: Complete instance migration (default behavior - dbatools-style)" -ForegroundColor Green
 Write-Host "# By default, migrates EVERYTHING for a complete instance upgrade:"
-Write-Host "# ✅ All user databases (excludes system: master, model, msdb, tempdb)"
-Write-Host "# ✅ All server objects: logins, jobs, linked servers, credentials, alerts, operators, etc."
-Write-Host "# ❌ Excludes utility databases (ReportServer, SSISDB, distribution) for safety"
-Write-Host "# This is the recommended approach for complete SQL Server instance migrations"
+Write-Host "# - All user databases (excludes system: master, model, msdb, tempdb)"
+Write-Host "# - All server objects: logins, jobs, linked servers, credentials, alerts, operators, etc."
+Write-Host "# - Excludes utility databases (ReportServer, SSISDB, distribution) for safety"
+Write-Host "# No -Databases parameter needed - defaults to 'All' (dbatools-style)"
+Write-Host @"
+.\Start-SQLServerUpgrade.ps1 `
+    -SourceInstance "SQL2019\PROD" `
+    -TargetInstance "SQL2022\PROD"
+"@
+
+Write-Host "`nExample 11: Server objects only - No database migration" -ForegroundColor Green
+Write-Host "# Migrate only server objects (logins, jobs, linked servers, etc.) without touching databases"
+Write-Host "# Use -Exclude 'Databases' to skip database migration entirely"
+Write-Host "# Useful when you only need to sync server-level configuration"
 Write-Host @"
 .\Start-SQLServerUpgrade.ps1 `
     -SourceInstance "SQL2019\PROD" `
     -TargetInstance "SQL2022\PROD" `
-    -Databases "All"
+    -Exclude 'Databases'
 "@
 
-Write-Host "`nExample 11: Exclude specific server objects for granular control" -ForegroundColor Green
-Write-Host "# Exclude specific server objects when you need granular control:"
+Write-Host "`nExample 12: Exclude specific components for granular control" -ForegroundColor Green
+Write-Host "# Exclude specific components when you need granular control:"
 Write-Host "# - Exclude 'Logins' when you want to review/manage security separately"
 Write-Host "# - Exclude 'AgentServer' when you want to prevent jobs from running immediately"
 Write-Host "# - Exclude 'LinkedServers' when connection strings need updating for new environment"
@@ -151,11 +161,10 @@ Write-Host @"
 .\Start-SQLServerUpgrade.ps1 `
     -SourceInstance "SQL2019\PROD" `
     -TargetInstance "SQL2022\PROD" `
-    -Databases "All" `
     -Exclude 'Logins','AgentServer','LinkedServers'
 "@
 
-Write-Host "`nExample 12: Include utility databases for servers with SSRS/SSIS/Replication" -ForegroundColor Green
+Write-Host "`nExample 13: Include utility databases for servers with SSRS/SSIS/Replication" -ForegroundColor Green
 Write-Host "# Include ReportServer, SSISDB, distribution databases when migrating servers with:"
 Write-Host "# - SQL Server Reporting Services (SSRS) - includes ReportServer databases"
 Write-Host "# - SQL Server Integration Services (SSIS) - includes SSISDB database"
@@ -165,7 +174,6 @@ Write-Host @"
 .\Start-SQLServerUpgrade.ps1 `
     -SourceInstance "SQL2019\PROD" `
     -TargetInstance "SQL2022\PROD" `
-    -Databases "All" `
     -IncludeSupportDbs
 "@
 
