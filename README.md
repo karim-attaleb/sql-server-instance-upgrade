@@ -19,7 +19,6 @@ A comprehensive PowerShell solution for upgrading SQL Server instances to SQL Se
 11. **Flexible Server Object Exclusion**: Comprehensive Exclude parameter for fine-grained control
 12. **Database Selection**: Choose specific databases or all user databases
 13. **Idempotent**: Safe to run multiple times
-14. **Start-DbaMigration.ps1 Compatibility**: Wrapper script following dbatools patterns
 
 ## Modular Architecture
 
@@ -79,14 +78,6 @@ The solution is organized into the following modules:
 # - Exclude 'AgentServer' when you want to prevent jobs from running immediately
 # - Exclude 'LinkedServers' when connection strings need updating for new environment
 .\Start-SQLServerUpgrade.ps1 -SourceInstance "SQL2019\PROD" -TargetInstance "SQL2022\PROD" -Databases "All" -Exclude 'Logins','AgentServer','LinkedServers'
-```
-
-**Start-DbaMigration.ps1 Wrapper - dbatools-compatible interface:**
-```powershell
-# Use the familiar dbatools Start-DbaMigration interface for complete instance migration
-# This provides the same comprehensive migration as the main script but with dbatools-style parameters
-# Migrates all user databases + all server objects by default (excludes system/utility databases)
-.\Start-DbaMigration.ps1 -Source "SQL2019\PROD" -Destination "SQL2022\PROD" -BackupRestore -SharedPath "\\server\backups" -WhatIf
 ```
 
 ### Basic Usage with WhatIf
@@ -188,7 +179,6 @@ Automatically performs:
 ```
 SQL-Server-Upgrade-Solution/
 ├── Start-SQLServerUpgrade.ps1          # Main orchestrator script
-├── Start-DbaMigration.ps1              # dbatools-compatible wrapper script
 ├── Modules/                             # PowerShell modules
 │   ├── SQLUpgrade.Logging.psm1         # Logging functionality
 │   ├── SQLUpgrade.Connection.psm1      # Connection management

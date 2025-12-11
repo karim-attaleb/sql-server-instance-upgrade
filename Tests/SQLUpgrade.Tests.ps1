@@ -404,15 +404,6 @@ Describe "Module Architecture Validation" {
             $script:MainScriptContent | Should -Match "\[string\[\]\]\`$Exclude"
             $script:MainScriptContent | Should -Match "IncludeSupportDbs"
         }
-        
-        It "Should have Start-DbaMigration.ps1 wrapper script" {
-            $wrapperScript = Join-Path $PSScriptRoot "..\Start-DbaMigration.ps1"
-            $wrapperScript | Should -Exist
-            $wrapperContent = Get-Content $wrapperScript -Raw
-            $wrapperContent | Should -Match "Start-SQLServerUpgrade\.ps1"
-            $wrapperContent | Should -Match "IncludeSupportDbs"
-            $wrapperContent | Should -Match "Exclude"
-        }
     }
     
     Context "Function Distribution" {
